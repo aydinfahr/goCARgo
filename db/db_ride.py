@@ -45,12 +45,12 @@ def search_ride(
         ridesQuery = ridesQuery.filter(func.date(DbRide.departure_time) == departure_date)
     
     if number_of_seats:
-        ridesQuery = ridesQuery.filter(DbRide.available_seats >= number_of_seats)
+        ridesQuery = ridesQuery.filter(DbRide.total_seats >= number_of_seats)
        
     rides = ridesQuery.all()
     return rides
 
 def calculate_available_seats(db:Session, ride: DbRide):
     booked_seats = db.query(DbBooking).filter(ride.id == DbBooking.ride_id).all()
-    return ride.available_seats - sum(m.seats_booked for m in booked_seats)
+    return ride.total_seats - sum(m.seats_booked for m in booked_seats)
 
