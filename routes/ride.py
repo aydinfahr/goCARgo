@@ -17,9 +17,12 @@ router = APIRouter(
 @router.post('/', response_model=RideDisplay)  
 def create_ride(request: RideBase, db: Session=Depends(get_db)):
     return db_ride.create_ride(db, request)
+    
+
+
 
 @router.get('/', response_model=RideDisplay)
-def get_ride(id: str, db: Session = Depends(get_db)):  # requested_seats search_rides'dan alinabilir mi?
+def get_ride(id: str, db: Session = Depends(get_db)): 
     return db_ride.get_ride(db, id)
 
 
