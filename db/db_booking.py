@@ -4,7 +4,6 @@ from db.models import DbBooking
 
 def create_booking(db: Session, request: BookingBase):
     new_booking = DbBooking(
-        id = request.id,
         ride_id = request.ride_id,
         passenger_id = request.passenger_id,
         seats_booked = request.seats_booked

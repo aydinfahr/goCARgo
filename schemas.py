@@ -33,14 +33,13 @@ class RideBase(BaseModel):
     end_location : str
     departure_time : datetime
     price_per_seat : float
-    available_seats : int 
+    total_seats : int 
 
 class RideDisplay(RideBase):
     class Config:
         from_attributes = True
 
 class BookingBase(BaseModel):
-    id :int
     ride_id : int
     passenger_id : int
     seats_booked : int

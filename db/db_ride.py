@@ -12,7 +12,7 @@ def create_ride(db: Session, request: RideBase):
         end_location = request.end_location,
         departure_time = request.departure_time, 
         price_per_seat = request.price_per_seat,
-        available_seats = request.available_seats
+        total_seats = request.total_seats,
     )
     db.add(new_ride)
     db.commit()
