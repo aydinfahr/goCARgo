@@ -17,13 +17,15 @@ class UserDisplay(BaseModel):
 
 
 class CarBase(BaseModel): 
-    owner_id : int
     brand : str 
     model : str
     color : str
 
 class CarDisplay(CarBase): #!!
+    owner_id: int
     id: int
+    class Config:
+        from_attributes = True
 
     
 class RideBase(BaseModel):
