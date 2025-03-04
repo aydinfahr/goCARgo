@@ -33,8 +33,8 @@ class DbUser(Base):
     rides = relationship("DbRide", back_populates="driver")  
     cars = relationship("DbCar", back_populates="owner")  
     bookings = relationship("DbBooking", back_populates="passenger")  
-    reviews_written = relationship("DbReview", foreign_keys="DbReview.reviewer_id", back_populates="reviewer")
-    reviews_received = relationship("DbReview", foreign_keys="DbReview.reviewee_id", back_populates="reviewee")
+    reviews_written = relationship("DbReview", foreign_keys="[DbReview.reviewer_id]", back_populates="reviewer")
+    reviews_received = relationship("DbReview", foreign_keys="[DbReview.reviewee_id]", back_populates="reviewee")
 
 
 class DbCar(Base):
@@ -107,18 +107,34 @@ class DbBooking(Base):
     passenger = relationship("DbUser", back_populates="bookings")
 
 
+# class DbReview(Base):
+#     __tablename__ = "reviews"
+
+#     id = Column(Integer, primary_key=True, index=True)
+#     ride_id = Column(Integer, ForeignKey("rides.id"), nullable=False)  # Reference to the ride
+#     reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Who wrote the review
+#     reviewee_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Who is being reviewed
+#     rating = Column(Float, nullable=False)  # Rating (1-5 stars)
+#     comment = Column(String, nullable=True)  # Optional feedback text
+#     review_time = Column(DateTime, default=func.now(), nullable=False)  # Timestamp of review
+
+#     # Relationships
+#     ride = relationship("DbRide", back_populates="reviews")  
+#     reviewer = relationship("DbUser", foreign_keys=[reviewer_id], back_populates="reviews_written")  
+#     reviewee = relationship("DbUser", foreign_keys=[reviewee_id], back_populates="reviews_received")  
+
 class DbReview(Base):
     __tablename__ = "reviews"
 
     id = Column(Integer, primary_key=True, index=True)
-    ride_id = Column(Integer, ForeignKey("rides.id"), nullable=False)  # Reference to the ride
-    reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Who wrote the review
-    reviewee_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Who is being reviewed
-    rating = Column(Float, nullable=False)  # Rating (1-5 stars)
-    comment = Column(String, nullable=True)  # Optional feedback text
-    review_time = Column(DateTime, default=func.now(), nullable=False)  # Timestamp of review
+    ride_id = Column(Integer, ForeignKey("rides.id"), nullable=False)  # Yolculuk referansı
+    reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Yorumu yazan kişi
+    reviewee_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Yorumu alan kişi (sürücü veya yolcu olabilir)
+    rating = Column(Float, nullable=False)  # 1-5 arası puan
+    comment = Column(String, nullable=True)  # Opsiyonel yorum
+    review_time = Column(DateTime, default=func.now(), nullable=False)  # Zaman damgası
 
-    # Relationships
+    # İlişkiler
     ride = relationship("DbRide", back_populates="reviews")  
     reviewer = relationship("DbUser", foreign_keys=[reviewer_id], back_populates="reviews_written")  
-    reviewee = relationship("DbUser", foreign_keys=[reviewee_id], back_populates="reviews_received")  
+    reviewee = relationship("DbUser", foreign_keys=[reviewee_id], back_populates="reviews_received")

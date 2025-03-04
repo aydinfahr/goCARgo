@@ -1,6 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel
-
+from typing import Optional
 
 class UserBase(BaseModel):
     email: str
@@ -48,3 +48,20 @@ class BookingBase(BaseModel):
 
 class BookingDisplay(BookingBase):
     pass
+
+class ReviewBase(BaseModel):
+    ride_id: int
+    reviewer_id: int
+    reviewee_id: int
+    rating: float
+    comment: Optional[str] = None
+
+class ReviewCreate(ReviewBase):
+    pass
+
+class ReviewResponse(ReviewBase):
+    id: int
+    review_time: datetime
+
+    class Config:
+        orm_mode = True
