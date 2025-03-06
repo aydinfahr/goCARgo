@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional,Literal
 from datetime import datetime
 
 
@@ -72,11 +72,12 @@ class BookingDisplay(BookingBase):
 # Base Review Schema for Creating a Review
 class ReviewBase(BaseModel):
     ride_id: int
-    user_id: int
     reviewer_id: int
     reviewee_id: int
+    review_type: str  # "driver", "passenger", "car", "service"
     rating: float = Field(..., ge=0, le=5, description="Rating must be between 0 and 5")
     comment: Optional[str] = None
+    is_anonymous: bool = False  # ✅ Default is not anonymous
 
 
 # Summary Schema for User Response
@@ -102,7 +103,6 @@ class RideSummary(BaseModel):
 class ReviewDisplay(ReviewBase):
     id: int
     review_time: datetime
-    user: Optional[UserSummary] = None  # The user who received the review
     reviewer: Optional[UserSummary] = None  # The user who wrote the review
     reviwee: Optional[UserSummary] = None  # The user associated with the review
     ride: Optional[RideSummary] = None  # The ride associated with the review
@@ -110,14 +110,21 @@ class ReviewDisplay(ReviewBase):
     class Config:
         from_attributes = True
 
+class ReviewVoteBase(BaseModel):
+    """Schema for voting on a review."""
+    vote_type: Literal["like", "dislike"]  # Ensures only valid options
+
 
 # Schema for Updating a Review (All Fields Optional)
 class ReviewUpdate(BaseModel):
     ride_id: Optional[int] = None
-    user_id: Optional[int] = None
     reviewer_id: Optional[int] = None
-    reviwee_id: Optional[int] = None
+    reviewee_id: Optional[int] = None
+    review_type: Optional[str] = None
     rating: Optional[float] = Field(None, ge=0, le=5, description="Rating must be between 0 and 5")
+    comment: Optional[str] = None
+    is_anonymous: Optional[bool] = None
+    media_url: Optional[str] = None  # ✅ Allow updating media URL
     comment: Optional[str] = None
 
 
