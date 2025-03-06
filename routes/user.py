@@ -1,9 +1,11 @@
 
 
 from typing import List
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
+
 
 from db import db_user
 from db.database import get_db
@@ -35,13 +37,16 @@ def get_user(id: int, db: Session=Depends(get_db)):
     return db_user.get_user(db, id)
 
 
+
+
+
 # Update user
-@router.post('/{id}/update')
+@router.put('/{id}')
 def update_user(id: int, request: UserBase, db: Session=Depends(get_db)):
     return db_user.update_user(db, id, request)
 
 # Delete user
-@router.get('/delete/{id}') #or ('/{id}/delete')
+@router.delete('/{id}') #or ('/{id}/delete')
 def delete_user(id: int, db: Session=Depends(get_db)):
     return db_user.delete_user(db, id)
 
