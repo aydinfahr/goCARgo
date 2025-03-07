@@ -1,11 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload  # ✅ Efficiently load related data
 from db import db_review
 from schemas import ReviewDisplay, ReviewBase, ReviewDeleteResponse, ReviewVoteBase, ReviewVoteDisplay, ReviewVoteCount
 from typing import List, Optional
-from db.models import DbReview, DbReviewVote
+from db.models import DbReview, DbReviewVote, DbReviewResponse, DbUser
 from db.database import get_db
 from enum import Enum  # ✅ Import Enum for dropdown options
+from sqlalchemy import func  # ✅ Import func for SQL functions
+from textblob import TextBlob
+
+
+def analyze_sentiment(comment: str) -> float:
+    """
+    Analyze the sentiment of a comment using TextBlob.
+    Returns a polarity score between -1 (very negative) and 1 (very positive).
+    """
+    sentiment_score = TextBlob(comment).sentiment.polarity
+    print(f"Sentiment Score: {sentiment_score} for comment: {comment}")  # ✅ Log for debugging
+    return sentiment_score
+
 
 
 # ✅ Define FastAPI router for review-related endpoints
@@ -30,14 +43,14 @@ class ReviewType(str, Enum):
 
 
 # ==============================================================
-# 📌 CREATE A NEW REVIEW (WITH FILE UPLOAD SUPPORT)
+# 📌 CEAT A REVIEW
 # ==============================================================
 # @router.post("/", response_model=ReviewDisplay)
 # def create_review(
 #     ride_id: int = Form(...),
 #     reviewer_id: int = Form(...),
 #     reviewee_id: int = Form(...),
-#     review_type: ReviewType = Form(...),  # ✅ Uses dropdown selection
+#     review_type: ReviewType = Form(...),
 #     rating: float = Form(...),
 #     comment: Optional[str] = Form(None),
 #     is_anonymous: bool = Form(False),
@@ -47,44 +60,48 @@ class ReviewType(str, Enum):
 #     """
 #     Creates a new review for a ride, driver, passenger, or service.
 #     - Prevents duplicate reviews for the same ride.
-#     - Allows optional file uploads (e.g., images/videos).
+#     - Uses AI Sentiment Analysis to block fake or abusive reviews.
 #     """
 
-#     # ✅ Check if the same review already exists
-#     existing_review = db.query(DbReview).filter(
-#         DbReview.ride_id == ride_id,
-#         DbReview.reviewer_id == reviewer_id,
-#         DbReview.reviewee_id == reviewee_id
-#     ).first()
+#     # ✅ Sentiment Analysis Check
+#     sentiment_score = analyze_sentiment(comment)
+    
+#     if sentiment_score < -0.5:
+#         raise HTTPException(status_code=400, detail="Review contains abusive or negative language.")
 
-#     if existing_review:
-#         raise HTTPException(status_code=400, detail="Review already exists for this ride and user.")
-
-#     # ✅ Handle file upload (save file path)
+#     # ✅ Ensure file is truly optional
 #     media_url = None
-#     if file:
-#         media_url = f"/uploads/{file.filename}"  # Example: Store the file path
+#     if file and file.filename:
+#         media_url = f"/uploads/{file.filename}"
 
-#     # ✅ Create a new review instance
+#     # ✅ Create new review entry
 #     new_review = DbReview(
 #         ride_id=ride_id,
 #         reviewer_id=reviewer_id,
 #         reviewee_id=reviewee_id,
-#         review_type=review_type.value,  # Store the string value
+#         review_type=review_type.value,  
 #         rating=rating,
 #         comment=comment,
 #         is_anonymous=is_anonymous,
 #         media_url=media_url
 #     )
 
-#     # ✅ Add to database
 #     db.add(new_review)
 #     db.commit()
 #     db.refresh(new_review)
 
 #     return new_review
 
+# ✅ Sentiment Analysis Function
+def analyze_sentiment(text: Optional[str]) -> float:
+    """Analyzes the sentiment of a given text and returns a sentiment score."""
+    if not text:
+        return 0  # If no comment is provided, assume neutral sentiment
+    sentiment = TextBlob(text).sentiment.polarity  # Returns a value between -1 (negative) and 1 (positive)
+    return sentiment
 
+
+# 📌 CREATE A NEW REVIEW WITH AI SENTIMENT ANALYSIS AND AVERAGE RATING UPDATE
 @router.post("/", response_model=ReviewDisplay)
 def create_review(
     ride_id: int = Form(...),
@@ -94,18 +111,25 @@ def create_review(
     rating: float = Form(...),
     comment: Optional[str] = Form(None),
     is_anonymous: bool = Form(False),
-    file: Optional[UploadFile] = File(None),  # ✅ Optional file parameter
+    file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
     """
     Creates a new review for a ride, driver, passenger, or service.
     - Prevents duplicate reviews for the same ride.
-    - Allows optional file uploads (e.g., images/videos).
+    - Uses AI Sentiment Analysis to block fake or abusive reviews.
+    - Updates the average rating of the reviewee.
     """
+
+    # ✅ AI Sentiment Analysis: Block abusive or fake reviews
+    sentiment_score = analyze_sentiment(comment)
+    
+    if sentiment_score < -0.5:
+        raise HTTPException(status_code=400, detail="Review contains abusive or negative language.")
 
     # ✅ Ensure file is truly optional
     media_url = None
-    if file and file.filename:  # ✅ Only process if file is uploaded
+    if file and file.filename:
         media_url = f"/uploads/{file.filename}"
 
     # ✅ Create new review entry
@@ -113,11 +137,70 @@ def create_review(
         ride_id=ride_id,
         reviewer_id=reviewer_id,
         reviewee_id=reviewee_id,
-        review_type=review_type.value,  
+        review_type=review_type.value,
         rating=rating,
         comment=comment,
         is_anonymous=is_anonymous,
-        media_url=media_url  # ✅ Store media file URL
+        media_url=media_url
+    )
+
+    db.add(new_review)
+    db.commit()
+    db.refresh(new_review)
+
+    # ✅ Update the average rating of the reviewee
+    average_rating = db.query(func.avg(DbReview.rating)).filter(DbReview.reviewee_id == reviewee_id).scalar()
+    
+    # ✅ Update the reviewee's profile with the new average rating
+    reviewee = db.query(DbUser).filter(DbUser.id == reviewee_id).first()
+    if reviewee:
+        reviewee.average_rating = round(average_rating, 2) if average_rating else 0
+        db.commit()
+
+    return new_review
+
+
+
+
+# ==============================================================
+# 📌 CEAT RESPONSE A REVIEW
+# ==============================================================
+@router.post("/", response_model=ReviewDisplay)
+def create_review(
+    ride_id: int = Form(...),
+    reviewer_id: int = Form(...),
+    reviewee_id: int = Form(...),
+    review_type: ReviewType = Form(...),
+    rating: float = Form(...),
+    comment: Optional[str] = Form(None),
+    is_anonymous: bool = Form(False),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Creates a new review, but first checks for fake or abusive content.
+    """
+
+    # ✅ If the comment exists, check its sentiment
+    if comment:
+        sentiment_score = analyze_sentiment(comment)
+        if sentiment_score < -0.5:  # Too negative?
+            raise HTTPException(status_code=400, detail="Your review is too negative or inappropriate.")
+
+    # ✅ Continue with normal review creation
+    media_url = None
+    if file and file.filename:
+        media_url = f"/uploads/{file.filename}"
+
+    new_review = DbReview(
+        ride_id=ride_id,
+        reviewer_id=reviewer_id,
+        reviewee_id=reviewee_id,
+        review_type=review_type.value,
+        rating=rating,
+        comment=comment,
+        is_anonymous=is_anonymous,
+        media_url=media_url
     )
 
     db.add(new_review)
@@ -127,10 +210,63 @@ def create_review(
     return new_review
 
 
-
 # ==============================================================
 # 📌 LIKE OR DISLIKE A REVIEW
 # ==============================================================
+# @router.post("/{review_id}/vote")
+# def vote_review(
+#     review_id: int,
+#     vote_type: VoteType = Query(..., description="Available values: like, dislike"),  # ✅ Forces dropdown selection
+#     user_id: int = Query(..., description="User ID of the voter"),  # ✅ Query param for user ID
+#     db: Session = Depends(get_db)
+# ):
+#     """
+#     Allows users to vote on a review (like/dislike).
+    
+#     - Prevents duplicate votes from the same user.
+#     - **vote_type** must be "like" or "dislike".
+#     """
+
+#     # ✅ Check if review exists
+#     review = db.query(DbReview).filter(DbReview.id == review_id).first()
+#     if not review:
+#         raise HTTPException(status_code=404, detail="Review not found")
+
+#     # ✅ Check if user already voted on this review
+#     existing_vote = db.query(DbReviewVote).filter(
+#         DbReviewVote.review_id == review_id,
+#         DbReviewVote.user_id == user_id
+#     ).first()
+
+#     if existing_vote:
+#         raise HTTPException(status_code=400, detail="You have already voted on this review")
+
+#     # ✅ Create a new vote entry
+#     new_vote = DbReviewVote(
+#         review_id=review_id,
+#         user_id=user_id,
+#         vote_type=vote_type.value  # Store the string value
+#     )
+
+#     db.add(new_vote)
+
+
+#     # ✅ Update like & dislike count in reviews table
+#     if vote_type.value == "like":
+#         review.likes += 1
+#     elif vote_type.value == "dislike":
+#         review.dislikes += 1
+
+
+#     db.commit()
+#     db.refresh(new_vote)
+
+#     return {
+#         "message": f"Vote recorded successfully: {vote_type.value}",
+#         "likes": review.likes,
+#         "dislikes": review.dislikes
+#     }
+
 @router.post("/{review_id}/vote")
 def vote_review(
     review_id: int,
@@ -185,10 +321,10 @@ def vote_review(
         "dislikes": review.dislikes
     }
 
-
 # ==============================================================
 # 📌 GET REVIEWS WITH OPTIONAL FILTERS
 # ==============================================================
+
 @router.get("/", response_model=List[ReviewDisplay])
 def get_reviews(
     ride_id: Optional[int] = None,
@@ -201,30 +337,33 @@ def get_reviews(
     - ride_id (Filter by ride)
     - reviewer_id (Filter by reviewer)
     - reviewee_id (Filter by reviewee)
-    - Includes the number of likes and dislikes.
+    - Includes response messages, like/dislike count, and average rating.
     """
 
-    # ✅ Ensure at least one filter is provided
-    if ride_id is None and reviewer_id is None and reviewee_id is None:
+    try:
+
+      # ✅ Ensure at least one filter is provided
+      if ride_id is None and reviewer_id is None and reviewee_id is None:
         raise HTTPException(status_code=400, detail="At least one filter (ride_id, reviewer_id, reviewee_id) is required.")
 
-    query = db.query(DbReview)
+      # ✅ Query reviews & load responses efficiently
+      query = db.query(DbReview).options(joinedload(DbReview.responses))  # ✅ Load review responses
 
-    if ride_id is not None:
+      if ride_id is not None:
         query = query.filter(DbReview.ride_id == ride_id)
-    if reviewer_id is not None:
+      if reviewer_id is not None:
         query = query.filter(DbReview.reviewer_id == reviewer_id)
-    if reviewee_id is not None:
+      if reviewee_id is not None:
         query = query.filter(DbReview.reviewee_id == reviewee_id)
 
-    reviews = query.all()
+      reviews = query.all()
 
-    if not reviews:
+      if not reviews:
         raise HTTPException(status_code=404, detail="No reviews found for the given criteria.")
-    
-    # ✅ Calculate like & dislike counts for each review
-    review_list = []
-    for review in reviews:
+
+      # ✅ Calculate like & dislike counts + average rating for each reviewee
+      review_list = []
+      for review in reviews:
         like_count = db.query(DbReviewVote).filter(
             DbReviewVote.review_id == review.id,
             DbReviewVote.vote_type == "like"
@@ -235,12 +374,31 @@ def get_reviews(
             DbReviewVote.vote_type == "dislike"
         ).count()
 
-        # Convert ORM object to dict and add vote_count field
+        # ✅ Calculate average rating for the reviewee
+        reviewee_ratings = db.query(DbReview.rating).filter(DbReview.reviewee_id == review.reviewee_id).all()
+        if reviewee_ratings:
+            avg_rating = sum(r[0] for r in reviewee_ratings) / len(reviewee_ratings)
+        else:
+            avg_rating = 0  # No reviews yet
+
+        # Debugging Print Statements
+        print(f"Review ID: {review.id}, Likes: {like_count}, Dislikes: {dislike_count}, Avg Rating: {avg_rating}")
+
+
+        # ✅ Convert ORM object to dict and add calculated fields
         review_dict = review.__dict__
-        review_dict["vote_count"] = ReviewVoteCount(likes=like_count, dislikes=dislike_count)
+        review_dict["vote_count"] = {"likes": like_count, "dislikes": dislike_count}
+        review_dict["responses"] = review.responses  # ✅ Include review responses
+        review_dict["average_rating"] = round(avg_rating, 2) if avg_rating else 0  # ✅ Round to 2 decimal places
+
         review_list.append(review_dict)
 
-    return reviews
+      return review_list
+
+    except Exception as e:
+     print(f"Error: {str(e)}")  # ✅ Debugging print
+     raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
 
 
 # ==============================================================
@@ -312,3 +470,37 @@ def delete_review(id: int, db: Session = Depends(get_db)):
     if not deleted_review:
         raise HTTPException(status_code=404, detail="Review not found or already deleted.")
     return ReviewDeleteResponse(message="Review successfully deleted.")
+
+
+# ==============================================================
+# 📌 RESPONSE A REVIEW
+# ==============================================================
+
+@router.post("/{review_id}/response")
+def add_review_response(
+    review_id: int,
+    responder_id: int = Form(...),  # The user/admin who responds
+    response_text: str = Form(...),  # The text of the response
+    db: Session = Depends(get_db)
+):
+    """
+    Allows users or admins to respond to a review.
+    """
+
+    # ✅ Check if the review exists
+    review = db.query(DbReview).filter(DbReview.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+
+    # ✅ Create a new response
+    response = DbReviewResponse(
+        review_id=review_id,
+        responder_id=responder_id,
+        response_text=response_text
+    )
+
+    db.add(response)
+    db.commit()
+    db.refresh(response)
+
+    return {"message": "Response added successfully"}

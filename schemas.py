@@ -156,6 +156,27 @@ class ReviewVoteCount(BaseModel):
     likes: int
     dislikes: int
 
+
+# ----------------------------------------------------
+# ✅ REVIEW RESPONSE SCHEMAS 
+# ----------------------------------------------------
+class ReviewResponseDisplay(BaseModel):
+    """
+    Schema for displaying review responses.
+    """
+    id: int
+    review_id: int
+    responder_id: int
+    response_text: str
+    response_time: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ----------------------------------------------------
+# ✅ REVIEW DISPLAY SCHEMAS 
+# ----------------------------------------------------
 class ReviewDisplay(BaseModel):
     id: int
     ride_id: int
@@ -169,7 +190,26 @@ class ReviewDisplay(BaseModel):
     review_time: str
     likes: int  # ✅ Shows number of likes
     dislikes: int  # ✅ Shows number of dislikes
-    vote_count: ReviewVoteCount  # ✅ LNew field to store like & dislike count
+   
+    # ✅ Added fields for votes and average rating
+    vote_count: ReviewVoteCount
+    average_rating: float  # ✅ New field added
+
+    # ✅ Response Reviews (Yorumun altındaki cevaplar)
+    responses: List[ReviewResponseDisplay] = []
     
+    class Config:
+        from_attributes = True
+        
+
+class ReviewDisplay(ReviewBase):
+    id: int
+    review_time: datetime
+    media_url: Optional[str] = None
+    likes: int
+    dislikes: int
+
+    responses: List[ReviewResponseDisplay] = []  # ✅ Show responses in the review
+
     class Config:
         from_attributes = True

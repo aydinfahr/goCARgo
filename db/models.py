@@ -108,17 +108,20 @@ class DbReview(Base):
 
 # ✅ REVIEW RESPONSE MODEL: Allows users to respond to reviews
 class DbReviewResponse(Base):
+    """
+    Stores responses to reviews, allowing users and admins to reply to any review.
+    """
     __tablename__ = "review_responses"
 
     id = Column(Integer, primary_key=True, index=True)
-    review_id = Column(Integer, ForeignKey("reviews.id"), nullable=False)  # The review being responded to
-    responder_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # The user responding
-    response_text = Column(String, nullable=False)  # Response content
-    response_time = Column(DateTime, default=func.now(), nullable=False)  # Timestamp of response
+    review_id = Column(Integer, ForeignKey("reviews.id"), nullable=False)  # The review this response belongs to
+    responder_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # The user who wrote the response
+    response_text = Column(String, nullable=False)
+    response_time = Column(DateTime, default=func.now(), nullable=False)
 
     # ✅ Relationships
     review = relationship("DbReview", back_populates="responses")
-    responder = relationship("DbUser")
+    responder = relationship("DbUser") # Links to the user responding
 
 
 # ✅ REVIEW VOTE MODEL: Stores user votes (likes/dislikes) for reviews
