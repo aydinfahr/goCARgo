@@ -8,7 +8,24 @@ from db.database import get_db
 from enum import Enum  # ✅ Import Enum for dropdown options
 from sqlalchemy import func  # ✅ Import func for SQL functions
 from textblob import TextBlob
+from db.utils import moderate_text
 
+
+
+# ✅ List of banned words (you can expand this)
+BANNED_WORDS = ["bad", "terrible", "awful", "stupid", "hate", "worst", "ugly", "idiot", "scam", "fake"]
+
+def contains_banned_word(comment: str) -> bool:
+    """
+    Checks if the comment contains any banned words.
+    """
+    if not comment:
+        return False
+    lower_comment = comment.lower()  # ✅ Make it case insensitive
+    for word in BANNED_WORDS:
+        if word in lower_comment:
+            return True
+    return False
 
 def analyze_sentiment(comment: str) -> float:
     """
@@ -19,13 +36,6 @@ def analyze_sentiment(comment: str) -> float:
     print(f"Sentiment Score: {sentiment_score} for comment: {comment}")  # ✅ Log for debugging
     return sentiment_score
 
-
-
-# ✅ Define FastAPI router for review-related endpoints
-router = APIRouter(
-    prefix="/reviews",
-    tags=["Reviews"]
-)
 
 
 # ✅ Define allowed vote types (Dropdown selection)
@@ -42,55 +52,15 @@ class ReviewType(str, Enum):
     service = "service"
 
 
-# ==============================================================
-# 📌 CEAT A REVIEW
-# ==============================================================
-# @router.post("/", response_model=ReviewDisplay)
-# def create_review(
-#     ride_id: int = Form(...),
-#     reviewer_id: int = Form(...),
-#     reviewee_id: int = Form(...),
-#     review_type: ReviewType = Form(...),
-#     rating: float = Form(...),
-#     comment: Optional[str] = Form(None),
-#     is_anonymous: bool = Form(False),
-#     file: Optional[UploadFile] = File(None),
-#     db: Session = Depends(get_db)
-# ):
-#     """
-#     Creates a new review for a ride, driver, passenger, or service.
-#     - Prevents duplicate reviews for the same ride.
-#     - Uses AI Sentiment Analysis to block fake or abusive reviews.
-#     """
+# ✅ Define FastAPI router for review-related endpoints
+router = APIRouter(
+    prefix="/reviews",
+    tags=["Reviews"]
+)
 
-#     # ✅ Sentiment Analysis Check
-#     sentiment_score = analyze_sentiment(comment)
-    
-#     if sentiment_score < -0.5:
-#         raise HTTPException(status_code=400, detail="Review contains abusive or negative language.")
-
-#     # ✅ Ensure file is truly optional
-#     media_url = None
-#     if file and file.filename:
-#         media_url = f"/uploads/{file.filename}"
-
-#     # ✅ Create new review entry
-#     new_review = DbReview(
-#         ride_id=ride_id,
-#         reviewer_id=reviewer_id,
-#         reviewee_id=reviewee_id,
-#         review_type=review_type.value,  
-#         rating=rating,
-#         comment=comment,
-#         is_anonymous=is_anonymous,
-#         media_url=media_url
-#     )
-
-#     db.add(new_review)
-#     db.commit()
-#     db.refresh(new_review)
-
-#     return new_review
+# ======================================================================================
+# 📌 CREATE A NEW REVIEW WITH AI SENTIMENT ANALYSIS AND AVERAGE RATING UPDATE
+# ======================================================================================
 
 # ✅ Sentiment Analysis Function
 def analyze_sentiment(text: Optional[str]) -> float:
@@ -101,7 +71,6 @@ def analyze_sentiment(text: Optional[str]) -> float:
     return sentiment
 
 
-# 📌 CREATE A NEW REVIEW WITH AI SENTIMENT ANALYSIS AND AVERAGE RATING UPDATE
 @router.post("/", response_model=ReviewDisplay)
 def create_review(
     ride_id: int = Form(...),
@@ -116,16 +85,40 @@ def create_review(
 ):
     """
     Creates a new review for a ride, driver, passenger, or service.
-    - Prevents duplicate reviews for the same ride.
+     - Prevents duplicate reviews for the same ride.
     - Uses AI Sentiment Analysis to block fake or abusive reviews.
-    - Updates the average rating of the reviewee.
+    - Uses manual word filtering for extra protection.
     """
 
-    # ✅ AI Sentiment Analysis: Block abusive or fake reviews
-    sentiment_score = analyze_sentiment(comment)
+    #     # ✅ Check for banned words
+    # if contains_banned_word(comment):
+    #     raise HTTPException(status_code=400, detail="Your comment contains inappropriate language.")
+
+
+
+    # # ✅ AI Sentiment Analysis: Block abusive or fake reviews
+    # sentiment_score = analyze_sentiment(comment)
     
-    if sentiment_score < -0.5:
-        raise HTTPException(status_code=400, detail="Review contains abusive or negative language.")
+    # if sentiment_score < -0.5:
+    #     raise HTTPException(status_code=400, detail="Review contains abusive or negative language.")
+    
+
+    # ✅ Moderation Check (DeepAI + Manual)
+    if comment and moderate_text(comment):
+        raise HTTPException(status_code=400, detail="Review contains offensive or inappropriate language.")
+
+
+
+    # ✅ Check if the same review already exists
+    existing_review = db.query(DbReview).filter(
+        DbReview.ride_id == ride_id,
+        DbReview.reviewer_id == reviewer_id,
+        DbReview.reviewee_id == reviewee_id
+    ).first()
+
+    if existing_review:
+        raise HTTPException(status_code=400, detail="You have already reviewed this ride/user.")
+
 
     # ✅ Ensure file is truly optional
     media_url = None
@@ -213,59 +206,6 @@ def create_review(
 # ==============================================================
 # 📌 LIKE OR DISLIKE A REVIEW
 # ==============================================================
-# @router.post("/{review_id}/vote")
-# def vote_review(
-#     review_id: int,
-#     vote_type: VoteType = Query(..., description="Available values: like, dislike"),  # ✅ Forces dropdown selection
-#     user_id: int = Query(..., description="User ID of the voter"),  # ✅ Query param for user ID
-#     db: Session = Depends(get_db)
-# ):
-#     """
-#     Allows users to vote on a review (like/dislike).
-    
-#     - Prevents duplicate votes from the same user.
-#     - **vote_type** must be "like" or "dislike".
-#     """
-
-#     # ✅ Check if review exists
-#     review = db.query(DbReview).filter(DbReview.id == review_id).first()
-#     if not review:
-#         raise HTTPException(status_code=404, detail="Review not found")
-
-#     # ✅ Check if user already voted on this review
-#     existing_vote = db.query(DbReviewVote).filter(
-#         DbReviewVote.review_id == review_id,
-#         DbReviewVote.user_id == user_id
-#     ).first()
-
-#     if existing_vote:
-#         raise HTTPException(status_code=400, detail="You have already voted on this review")
-
-#     # ✅ Create a new vote entry
-#     new_vote = DbReviewVote(
-#         review_id=review_id,
-#         user_id=user_id,
-#         vote_type=vote_type.value  # Store the string value
-#     )
-
-#     db.add(new_vote)
-
-
-#     # ✅ Update like & dislike count in reviews table
-#     if vote_type.value == "like":
-#         review.likes += 1
-#     elif vote_type.value == "dislike":
-#         review.dislikes += 1
-
-
-#     db.commit()
-#     db.refresh(new_vote)
-
-#     return {
-#         "message": f"Vote recorded successfully: {vote_type.value}",
-#         "likes": review.likes,
-#         "dislikes": review.dislikes
-#     }
 
 @router.post("/{review_id}/vote")
 def vote_review(
@@ -279,12 +219,20 @@ def vote_review(
     
     - Prevents duplicate votes from the same user.
     - **vote_type** must be "like" or "dislike".
+    - Ensures that the user exists before voting.
+    - Returns updated like and dislike counts.
     """
 
     # ✅ Check if review exists
     review = db.query(DbReview).filter(DbReview.id == review_id).first()
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
+    
+    # ✅ Check if the user exists
+    user = db.query(DbUser).filter(DbUser.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid user ID. User does not exist.")
+
 
     # ✅ Check if user already voted on this review
     existing_vote = db.query(DbReviewVote).filter(
