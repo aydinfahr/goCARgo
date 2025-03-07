@@ -71,7 +71,8 @@ class DbRide(Base):
     end_location = Column(String, nullable=False)  # Example: "Amsterdam"
     departure_time = Column(DateTime, nullable=False)  # Example: "2025-02-27 06:30"
     price_per_seat = Column(Float, nullable=False)  # Cost per seat                         # default=0.00 ?
-    total_seats = Column(Integer, nullable=False)  # Seats available for passengers #total_seats yap
+    total_seats = Column(Integer, nullable=False)  
+    available_seats = Column(Integer, nullable=False) # New
 
     # Optional fields (Not in BlaBlaCar, but useful)
     # luggage_capacity = Column(Integer, nullable=False)  # Luggage space per passenger

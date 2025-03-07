@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class UserBase(BaseModel):
@@ -17,29 +17,48 @@ class UserDisplay(BaseModel):
 
 
 class CarBase(BaseModel): 
+    owner_id : int
     brand : str 
     model : str
     color : str
 
-class CarDisplay(CarBase): #!!
-    owner_id: int
+class CarDisplay(CarBase): 
     id: int
     class Config:
         from_attributes = True
 
-    
-class RideBase(BaseModel):
-    driver_id : int
-    car_id : int
-    start_location : str
-    end_location : str
-    departure_time : datetime
-    price_per_seat : float
-    total_seats : int 
 
-class RideDisplay(RideBase):
+class RideBase(BaseModel):
+    driver_id: int
+    car_id: int
+    start_location: str
+    end_location: str
+    date: str = Field(..., example=datetime.now().strftime("%d-%m-%Y"))  
+    time: str = Field(..., example=datetime.now().strftime("%H:%M"))   
+    price_per_seat: float = 1.00
+    total_seats: int = 1
+    
     class Config:
         from_attributes = True
+
+    def get_departure_datetime(self) -> datetime:
+        return datetime.strptime(f"{self.date} {self.time}", "%d-%m-%Y %H:%M")
+    
+
+class RideDisplay(BaseModel):
+    id: int
+    driver_id: int
+    car_id: int
+    start_location: str
+    end_location: str
+    departure_time: datetime
+    price_per_seat: float
+    total_seats: int
+    available_seats: int
+
+    class Config:
+        from_attributes = True
+
 
 class BookingBase(BaseModel):
     ride_id : int
@@ -48,3 +67,4 @@ class BookingBase(BaseModel):
 
 class BookingDisplay(BookingBase):
     pass
+
