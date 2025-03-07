@@ -4,65 +4,7 @@ from sqlalchemy.sql import func
 from db.database import Base
 
 
-
-class DbReview(Base):
-    __tablename__ = "reviews"
-
-    id = Column(Integer, primary_key=True, index=True)
-    ride_id = Column(Integer, ForeignKey("rides.id"), nullable=False)
-    # user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  
-    reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    reviewee_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    review_type = Column(String, nullable=False)  # ✅ "driver", "passenger", "car", "service"
-    rating = Column(Float, nullable=False)
-    comment = Column(String, nullable=True)
-    is_anonymous = Column(Boolean, default=False)  # ✅ Controling anonymous or not
-    media_url = Column(String, nullable=True)  # ✅ Store image/video URL
-    likes = Column(Integer, default=0)  # Did users find this review helpful count number?
-    dislike = Column(Integer, default=0)  # Did users find this review unnecessary count number?
-    review_time = Column(DateTime, default=func.now(), nullable=False)
-
-    # Relationships
-    ride = relationship("DbRide", back_populates="reviews")
-    #user = relationship("DbUser", foreign_keys=[user_id])  
-    reviewer = relationship("DbUser", foreign_keys=[reviewer_id], back_populates="reviews_written")
-    reviewee = relationship("DbUser", foreign_keys=[reviewee_id], back_populates="reviews_received")
-    responses = relationship("DbReviewResponse", back_populates="review")
-    votes = relationship("DbReviewVote", back_populates="review", cascade="all, delete-orphan")
-
-    # No relationship needed for review_type as it is a simple string column
-
-
-class DbReviewResponse(Base):
-    __tablename__ = "review_responses"
-
-    id = Column(Integer, primary_key=True, index=True)
-    review_id = Column(Integer, ForeignKey("reviews.id"), nullable=False)
-    responder_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # The user replying
-    response_text = Column(String, nullable=False)
-    response_time = Column(DateTime, default=func.now(), nullable=False)
-
-    # Relationships
-    review = relationship("DbReview", back_populates="responses")
-    responder = relationship("DbUser")
-
-
-class DbReviewVote(Base):
-    """Stores likes/dislikes for reviews with a unique constraint to prevent duplicate votes."""
-    __tablename__ = "review_votes"
-
-    id = Column(Integer, primary_key=True, index=True)
-    review_id = Column(Integer, ForeignKey("reviews.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    vote_type = Column(String, nullable=False)  # "like" or "dislike"
-
-    # Prevent a user from voting multiple times on the same review
-    __table_args__ = (UniqueConstraint("review_id", "user_id", name="unique_review_vote"),)
-
-    # Relationships
-    review = relationship("DbReview", back_populates="votes")
-
-
+# ✅ USER MODEL: Represents a platform user
 class DbUser(Base):
     __tablename__ = 'users'
 
@@ -71,71 +13,125 @@ class DbUser(Base):
     email = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
     full_name = Column(String, nullable=False)
-    rating = Column(Float, nullable=True)
-    verified_id = Column(Boolean, default=False)
-    verified_email = Column(Boolean, default=False)
-    bio = Column(String, nullable=True)
-    member_since = Column(DateTime, default=func.now())
-    is_admin = Column(Boolean, default=False)
+    rating = Column(Float, nullable=True)  # User's overall rating (based on received reviews)
+    verified_id = Column(Boolean, default=False)  # Indicates if ID is verified
+    verified_email = Column(Boolean, default=False)  # Indicates if email is verified
+    bio = Column(String, nullable=True)  # User's bio (optional)
+    member_since = Column(DateTime, default=func.now())  # Account creation timestamp
+    is_admin = Column(Boolean, default=False)  # Admin status
 
-    # Relationships
-    rides = relationship("DbRide", back_populates="driver")
-    cars = relationship("DbCar", back_populates="owner")
-    bookings = relationship("DbBooking", back_populates="passenger")
-    reviews_written = relationship("DbReview", foreign_keys=[DbReview.reviewer_id], back_populates="reviewer")
-    reviews_received = relationship("DbReview", foreign_keys=[DbReview.reviewee_id], back_populates="reviewee")
-
-
+    # ✅ Relationships
+    rides = relationship("DbRide", back_populates="driver")  # Rides offered by the user
+    cars = relationship("DbCar", back_populates="owner")  # Cars owned by the user
+    bookings = relationship("DbBooking", back_populates="passenger")  # Bookings made by the user
+    reviews_written = relationship("DbReview", foreign_keys="[DbReview.reviewer_id]", back_populates="reviewer")
+    reviews_received = relationship("DbReview", foreign_keys="[DbReview.reviewee_id]", back_populates="reviewee")
 
 
+# ✅ CAR MODEL: Represents a car owned by a user
 class DbCar(Base):
-    """Represents a car owned by a user."""
     __tablename__ = "cars"
 
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    brand = Column(String, nullable=False)
-    model = Column(String, nullable=False)
-    color = Column(String, nullable=False)
+    brand = Column(String, nullable=False)  # Car brand (e.g., Toyota)
+    model = Column(String, nullable=False)  # Car model (e.g., Corolla)
+    color = Column(String, nullable=False)  # Car color (e.g., Red)
 
-    # Relationships
-    owner = relationship("DbUser", back_populates="cars")
-    rides = relationship("DbRide", back_populates="car")
+    # ✅ Relationships
+    owner = relationship("DbUser", back_populates="cars")  # The user who owns the car
+    rides = relationship("DbRide", back_populates="car")  # Rides using this car
 
 
+# ✅ RIDE MODEL: Represents a car-sharing ride offered by a user
 class DbRide(Base):
-    """Represents a ride offered by a user."""
     __tablename__ = "rides"
 
     id = Column(Integer, primary_key=True, index=True)
-    driver_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    car_id = Column(Integer, ForeignKey("cars.id"), nullable=False)
-    start_location = Column(String, nullable=False)
-    end_location = Column(String, nullable=False)
-    departure_time = Column(DateTime, nullable=False)
-    price_per_seat = Column(Float, nullable=False)
-    total_seats = Column(Integer, nullable=False)
+    driver_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # The driver offering the ride
+    car_id = Column(Integer, ForeignKey("cars.id"), nullable=False)  # The car used for the ride
+    start_location = Column(String, nullable=False)  # Ride starting point
+    end_location = Column(String, nullable=False)  # Ride destination
+    departure_time = Column(DateTime, nullable=False)  # Departure time
+    price_per_seat = Column(Float, nullable=False)  # Cost per seat
+    total_seats = Column(Integer, nullable=False)  # Total available seats
 
-    # Relationships
+    # ✅ Relationships
     driver = relationship("DbUser", back_populates="rides")
     car = relationship("DbCar", back_populates="rides")
     bookings = relationship("DbBooking", back_populates="ride")
-    reviews = relationship("DbReview", back_populates="ride")
+    reviews = relationship("DbReview", back_populates="ride")  # Reviews related to this ride
 
 
+# ✅ BOOKING MODEL: Represents a user's booking for a ride
 class DbBooking(Base):
-    """Represents a booking made by a user for a ride."""
     __tablename__ = "bookings"
 
     id = Column(Integer, primary_key=True, index=True)
-    ride_id = Column(Integer, ForeignKey("rides.id"), nullable=False)
-    passenger_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    booking_time = Column(DateTime, default=func.now(), nullable=False)
-    status = Column(String, default="Pending")
-    seats_booked = Column(Integer, nullable=False)
+    ride_id = Column(Integer, ForeignKey("rides.id"), nullable=False)  # The ride being booked
+    passenger_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # The passenger making the booking
+    booking_time = Column(DateTime, default=func.now(), nullable=False)  # Timestamp of booking
+    status = Column(String, default="Pending")  # Booking status (Pending, Confirmed, Canceled)
+    seats_booked = Column(Integer, nullable=False)  # Number of seats booked
 
-    # Relationships
+    # ✅ Relationships
     ride = relationship("DbRide", back_populates="bookings")
     passenger = relationship("DbUser", back_populates="bookings")
 
 
+# ✅ REVIEW MODEL: Stores user feedback about rides, drivers, passengers, and cars
+class DbReview(Base):
+    __tablename__ = "reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ride_id = Column(Integer, ForeignKey("rides.id"), nullable=False)  # Ride being reviewed
+    reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # User writing the review
+    reviewee_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # User receiving the review
+    review_type = Column(String, nullable=False)  # "driver", "passenger", "car", "service"
+    rating = Column(Float, nullable=False)  # Rating (1.0-5.0)
+    comment = Column(String, nullable=True)  # Optional comment
+    is_anonymous = Column(Boolean, default=False)  # Indicates if the review is anonymous
+    media_url = Column(String, nullable=True)  # URL for any attached media (image/video)
+    review_time = Column(DateTime, default=func.now(), nullable=False)  # Timestamp of the review
+
+    # ✅ Like & Dislike Counters
+    likes = Column(Integer, default=0)  # Stores number of likes
+    dislikes = Column(Integer, default=0)  # Stores number of dislikes
+
+    # ✅ Relationships
+    ride = relationship("DbRide", back_populates="reviews")
+    reviewer = relationship("DbUser", foreign_keys=[reviewer_id], back_populates="reviews_written")
+    reviewee = relationship("DbUser", foreign_keys=[reviewee_id], back_populates="reviews_received")
+    votes = relationship("DbReviewVote", back_populates="review", cascade="all, delete-orphan")  # Likes/Dislikes
+    responses = relationship("DbReviewResponse", back_populates="review", cascade="all, delete-orphan")  # Replies
+
+
+# ✅ REVIEW RESPONSE MODEL: Allows users to respond to reviews
+class DbReviewResponse(Base):
+    __tablename__ = "review_responses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    review_id = Column(Integer, ForeignKey("reviews.id"), nullable=False)  # The review being responded to
+    responder_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # The user responding
+    response_text = Column(String, nullable=False)  # Response content
+    response_time = Column(DateTime, default=func.now(), nullable=False)  # Timestamp of response
+
+    # ✅ Relationships
+    review = relationship("DbReview", back_populates="responses")
+    responder = relationship("DbUser")
+
+
+# ✅ REVIEW VOTE MODEL: Stores user votes (likes/dislikes) for reviews
+class DbReviewVote(Base):
+    __tablename__ = "review_votes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    review_id = Column(Integer, ForeignKey("reviews.id"), nullable=False)  # The review being voted on
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # The user who voted
+    vote_type = Column(String, nullable=False)  # "like" or "dislike"
+
+    # Prevent duplicate votes by the same user on the same review
+    __table_args__ = (UniqueConstraint("review_id", "user_id", name="unique_review_vote"),)
+
+    # ✅ Relationships
+    review = relationship("DbReview", back_populates="votes")
