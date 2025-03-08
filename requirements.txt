@@ -6,3 +6,11 @@ bcrypt
 pydantic[email]
 alembic
 python-dotenv
+utils
+requests
+python-multipart
+twilio
+sendgrid
+python-jose
+cryptography
+textblob
