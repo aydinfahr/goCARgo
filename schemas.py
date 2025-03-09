@@ -1,24 +1,19 @@
 from pydantic import BaseModel, EmailStr, Field
+from enum import Enum
 from typing import Optional, List
 from datetime import datetime
-from enum import Enum
+from db.models import UserRole, ReviewCategory, VoteType, PaymentStatus  # Import Enums from models.py
 
-
-# ✅ Kullanıcı Rolleri (Dropdown Seçimi İçin)
-class UserRole(str, Enum):
-    driver = "driver"
-    passenger = "passenger"
-    admin = "admin"
-
-# ✅ Kullanıcı Kayıt Şeması (Form Kullanımı İçin)
-class UserCreate(BaseModel):
+# ✅ User Schemas
+class UserBaseSchema(BaseModel):
     username: str
     email: EmailStr
     password: str
     full_name: str
-    role: UserRole  # 🚀 Dropdown olarak ayarlanacak
-    agreed_terms: bool  # 🚀 Checkbox (True/False)
+    role: UserRole  # Dropdown selection
 
+class UserCreate(UserBaseSchema):
+    agreed_terms: bool  # Checkbox for user agreement (True/False)
 
 class UserDisplay(BaseModel):
     id: int
@@ -36,24 +31,11 @@ class UserDisplay(BaseModel):
     profile_picture: Optional[str] = None  # Profile Image URL
 
     class Config:
-        from_attributes = True
-
-
-class UserBase(BaseModel):
-    username: str
-    email: EmailStr
-    password: str
-    full_name: str
-    role: UserRole  # 🚀 Dropdown olarak ayarlanacak
-
-class UserCreate(UserBase):
-    agreed_terms: bool  # Kullanıcı sözleşmesini kabul etmeli
-
+        from_attributes = True  # Enables ORM mode for SQLAlchemy
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
-
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
@@ -61,22 +43,18 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     profile_picture: Optional[str] = None
 
-
 class UserDeleteResponse(BaseModel):
     message: str
 
-
-# ✅ Araç Şemaları
+# ✅ Car Schemas
 class CarBase(BaseModel):
     brand: str
     model: str
     color: str
     images: Optional[List[str]] = None  # Car images
 
-
 class CarCreate(CarBase):
-    pass
-
+    pass  # No additional fields
 
 class CarDisplay(CarBase):
     id: int
@@ -85,15 +63,13 @@ class CarDisplay(CarBase):
     class Config:
         from_attributes = True
 
-
 class CarUpdate(BaseModel):
     brand: Optional[str] = None
     model: Optional[str] = None
     color: Optional[str] = None
     images: Optional[List[str]] = None
 
-
-# ✅ Yolculuk Şemaları
+# ✅ Ride Schemas
 class RideBase(BaseModel):
     driver_id: int
     car_id: int
@@ -103,10 +79,8 @@ class RideBase(BaseModel):
     price_per_seat: float
     total_seats: int
 
-
 class RideCreate(RideBase):
-    pass
-
+    pass  # No additional fields
 
 class RideDisplay(RideBase):
     id: int
@@ -115,7 +89,6 @@ class RideDisplay(RideBase):
     class Config:
         from_attributes = True
 
-
 class RideUpdate(BaseModel):
     start_location: Optional[str] = None
     end_location: Optional[str] = None
@@ -123,13 +96,11 @@ class RideUpdate(BaseModel):
     price_per_seat: Optional[float] = None
     total_seats: Optional[int] = None
 
-
-# ✅ Rezervasyon Şemaları
+# ✅ Booking Schemas
 class BookingStatus(str, Enum):
     PENDING = "pending"
     CONFIRMED = "confirmed"
     CANCELLED = "cancelled"
-
 
 class BookingBase(BaseModel):
     ride_id: int
@@ -137,10 +108,8 @@ class BookingBase(BaseModel):
     phone_number: Optional[str]  # Only for offline bookings
     seats_booked: int
 
-
 class BookingCreate(BookingBase):
-    pass
-
+    pass  # No additional fields
 
 class BookingDisplay(BaseModel):
     id: int
@@ -155,20 +124,11 @@ class BookingDisplay(BaseModel):
     class Config:
         from_attributes = True
 
-
 class BookingCancel(BaseModel):
     booking_id: int
-    cancel_reason: Optional[str] = None  # İptal nedeni (isteğe bağlı)
+    cancel_reason: Optional[str] = None  # Cancellation reason (optional)
 
-
-# ✅ Yorum Şemaları
-class ReviewCategory(str, Enum):
-    DRIVER = "driver"
-    PASSENGER = "passenger"
-    CAR = "car"
-    SERVICE = "service"
-
-
+# ✅ Review Schemas
 class ReviewBase(BaseModel):
     ride_id: int
     author_id: int  # User who wrote the review
@@ -179,45 +139,34 @@ class ReviewBase(BaseModel):
     anonymous_review: bool = False
     media_url: Optional[str] = None  # Image/Video URL
 
-
 class ReviewCreate(ReviewBase):
-    pass
-
+    pass  # No additional fields
 
 class ReviewDisplay(ReviewBase):
     id: int
     created_at: datetime
     likes: int
     dislikes: int
-    average_rating: float  # ✅ Real-time updated average rating
+    average_rating: float  # Dynamically updated average rating
 
     class Config:
         from_attributes = True
 
-
 class ReviewVoteCreate(BaseModel):
     review_id: int
     voter_id: int
-    vote_type: str  # Örneğin: "like" veya "dislike"
-
+    vote_type: VoteType  # Enum: Like or Dislike
 
 class ReviewResponseCreate(BaseModel):
     review_id: int
     responder_id: int
     response_text: str
 
-
-# ✅ Oylama Şemaları
-class VoteType(str, Enum):
-    LIKE = "like"
-    DISLIKE = "dislike"
-
-
+# ✅ Vote Schemas
 class ReviewVoteBase(BaseModel):
     review_id: int
     voter_id: int
     vote_type: VoteType  # Enum: Like or Dislike
-
 
 class ReviewVoteDisplay(BaseModel):
     id: int
@@ -227,25 +176,15 @@ class ReviewVoteDisplay(BaseModel):
     class Config:
         from_attributes = True
 
-
-# ✅ Ödeme Şemaları
-class PaymentStatus(str, Enum):
-    PENDING = "pending"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    REFUNDED = "refunded"
-
-
+# ✅ Payment Schemas
 class PaymentBase(BaseModel):
     user_id: int
     ride_id: int
     amount: float
     payment_status: PaymentStatus
 
-
 class PaymentCreate(PaymentBase):
-    pass
-
+    pass  # No additional fields
 
 class PaymentDisplay(BaseModel):
     id: int
@@ -258,26 +197,22 @@ class PaymentDisplay(BaseModel):
     class Config:
         from_attributes = True
 
-
-# ✅ Geri Ödeme Şeması
+# ✅ Refund Policy Schema
 class RefundPolicy(BaseModel):
-    refund_percentage_24h: float = 1.0  # 100% refund if cancelled 24+ hours before
-    refund_percentage_12h: float = 0.5  # 50% refund if cancelled 12-24 hours before
-    refund_percentage_last_min: float = 0.0  # No refund if cancelled less than 12 hours
+    refund_percentage_24h: float = 1.0  # 100% refund if canceled 24+ hours before
+    refund_percentage_12h: float = 0.5  # 50% refund if canceled 12-24 hours before
+    refund_percentage_last_min: float = 0.0  # No refund if canceled less than 12 hours before
 
-
-# ✅ Kimlik Doğrulama Şemaları
+# ✅ Authentication Schemas
 class AuthRequest(BaseModel):
     email: EmailStr
     password: str
-
 
 class AuthResponse(BaseModel):
     access_token: str
     token_type: str
     user: UserDisplay
 
-
-# ✅ Kullanıcı Sözleşmesi Şeması
+# ✅ User Agreement Schema
 class Agreement(BaseModel):
     agreed: bool  # Must be true to proceed with signup

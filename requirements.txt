@@ -14,3 +14,5 @@ sendgrid
 python-jose
 cryptography
 textblob
+
+# pip install -r requirements.txt

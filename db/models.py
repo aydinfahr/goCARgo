@@ -1,42 +1,44 @@
-from sqlalchemy import Column, Integer, Float, String, Boolean, ForeignKey, DateTime, Enum, Text
-import enum
+from sqlalchemy import Column, Integer, Float, String, Boolean, ForeignKey, DateTime, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from db.database import Base
-from sqlalchemy.ext.declarative import declarative_base
+from enum import Enum  # ✅ Import Python's Enum for defining custom enums
+from sqlalchemy import Enum as SQLEnum  # ✅ Import SQLAlchemy's Enum explicitly
 from datetime import datetime
 
+# ✅ ENUM Definitions
+class UserRole(str, Enum):  # Ensures proper storage in DB
+    DRIVER = "DRIVER"
+    PASSENGER = "PASSENGER"
+    ADMIN = "ADMIN"
 
-Base = declarative_base()
+class BookingStatus(str, Enum):
+    PENDING = "PENDING"
+    CONFIRMED = "CONFIRMED"
+    CANCELLED = "CANCELLED"
 
-# ✅ ENUM Tanımları (SQLAlchemy Enum Kullanımıyla)
-class UserRole(enum.Enum):
-    DRIVER = "driver"
-    PASSENGER = "passenger"
-    ADMIN = "admin"
+class ReviewCategory(str, Enum):
+    DRIVER = "DRIVER"
+    PASSENGER = "PASSENGER"
+    CAR = "CAR"
+    SERVICE = "SERVICE"
 
-class BookingStatus(enum.Enum):
+class VoteType(str, Enum):
+    LIKE = "LIKE"
+    DISLIKE = "DISLIKE"
+
+class ComplaintStatus(str, Enum):
     PENDING = "pending"
-    CONFIRMED = "confirmed"
-    CANCELLED = "cancelled"
+    RESOLVED = "resolved"
+    DISMISSED = "dismissed"
 
-class ReviewCategory(enum.Enum):
-    DRIVER = "driver"
-    PASSENGER = "passenger"
-    CAR = "car"
-    SERVICE = "service"
-
-class VoteType(enum.Enum):
-    LIKE = "like"
-    DISLIKE = "dislike"
-
-class PaymentStatus(enum.Enum):
+class PaymentStatus(str, Enum):
     PENDING = "pending"
     COMPLETED = "completed"
     FAILED = "failed"
     REFUNDED = "refunded"
 
-# ✅ Kullanıcı Modeli
+# ✅ User Model
 class User(Base):
     __tablename__ = "users"
 
@@ -45,7 +47,7 @@ class User(Base):
     email = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
     full_name = Column(String, nullable=False)
-    role = Column(Enum(UserRole, name="user_roles"), nullable=False)
+    role = Column(SQLEnum(UserRole), nullable=False)  # ✅ Fixed ENUM issue
     is_admin = Column(Boolean, default=False)
     is_banned = Column(Boolean, default=False)
     wallet_balance = Column(Float, default=0.0)
@@ -53,7 +55,7 @@ class User(Base):
     rating_count = Column(Integer, default=0)
     verified_id = Column(Boolean, default=False)
     verified_email = Column(Boolean, default=False)
-    agreed_terms = Column(Boolean, default=False)  # ✅ Kullanıcı sözleşmesini onaylama alanı
+    agreed_terms = Column(Boolean, default=False)
     member_since = Column(DateTime, default=func.now())
 
     rides = relationship("Ride", back_populates="driver")
@@ -63,7 +65,8 @@ class User(Base):
     reviews_received = relationship("Review", foreign_keys="[Review.reviewee_id]", back_populates="reviewee")
     payments = relationship("Payment", back_populates="user")
 
-# ✅ Yolculuk Modeli
+
+# ✅ Ride Model
 class Ride(Base):
     __tablename__ = "rides"
 
@@ -81,7 +84,7 @@ class Ride(Base):
     bookings = relationship("Booking", back_populates="ride")
     payments = relationship("Payment", back_populates="ride")
 
-# ✅ Araba Modeli
+# ✅ Car Model
 class Car(Base):
     __tablename__ = "cars"
 
@@ -95,7 +98,11 @@ class Car(Base):
     owner = relationship("User", back_populates="cars")
     rides = relationship("Ride", back_populates="car")
 
-# ✅ Rezervasyon Modeli
+# ✅ Booking Model
+class BookingSource(str, Enum):  # ✅ Separate ENUM for `booking_source`
+    ONLINE = "online"
+    OFFLINE = "offline"
+
 class Booking(Base):
     __tablename__ = "bookings"
 
@@ -103,38 +110,26 @@ class Booking(Base):
     ride_id = Column(Integer, ForeignKey("rides.id"), nullable=False)
     passenger_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     phone_number = Column(String, nullable=True)
-    booking_source = Column(Enum("online", "offline", name="booking_sources"), default="online")  
+    booking_source = Column(SQLEnum(BookingSource), nullable=False, default=BookingSource.ONLINE)  # ✅ Fixed ENUM usage
     booking_time = Column(DateTime, default=func.now(), nullable=False)
-    status = Column(Enum(BookingStatus, name="booking_statuses"), default=BookingStatus.PENDING)
+    status = Column(SQLEnum(BookingStatus), nullable=False, default=BookingStatus.PENDING)  # ✅ Fixed ENUM usage
     seats_booked = Column(Integer, nullable=False)
     refund_amount = Column(Float, nullable=True)
 
     ride = relationship("Ride", back_populates="bookings")
     passenger = relationship("User", back_populates="bookings", foreign_keys=[passenger_id])
 
-# ✅ Yorum Modeli
-# ✅ Review Yanıt Modeli
-class ReviewResponse(Base):
-    __tablename__ = "review_responses"
-    
-    id = Column(Integer, primary_key=True)
-    review_id = Column(Integer, ForeignKey("reviews.id"), nullable=False)
-    responder_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    response_text = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    
-    review = relationship("Review", back_populates="responses")
-    responder = relationship("User")
 
-# ✅ Review modeline `responses` ilişkilendirmesi eklendi mi?
+# ✅ Review Model
 class Review(Base):
     __tablename__ = "reviews"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     ride_id = Column(Integer, ForeignKey("rides.id"), nullable=False)
     reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     reviewee_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    review_category = Column(Enum("driver", "passenger", "car", "service"), nullable=False)
+    # review_category = Column(Enum(ReviewCategory), nullable=False)  # Fixed ENUM usage
+    review_category = Column(SQLEnum(ReviewCategory), nullable=False)
     star_rating = Column(Float, nullable=False)
     review_text = Column(Text, nullable=True)
     anonymous_review = Column(Boolean, default=False)
@@ -148,22 +143,35 @@ class Review(Base):
     reviewer = relationship("User", foreign_keys=[reviewer_id], back_populates="reviews_written")
     reviewee = relationship("User", foreign_keys=[reviewee_id], back_populates="reviews_received")
     votes = relationship("ReviewVote", back_populates="review", cascade="all, delete-orphan")
-    responses = relationship("ReviewResponse", back_populates="review", cascade="all, delete-orphan")  # 🔥 Eksikse ekle!
+    responses = relationship("ReviewResponse", back_populates="review", cascade="all, delete-orphan")
 
+# ✅ Review Response Model
+class ReviewResponse(Base):
+    __tablename__ = "review_responses"
 
-# ✅ Yorum Oylama Modeli
+    id = Column(Integer, primary_key=True)
+    review_id = Column(Integer, ForeignKey("reviews.id"), nullable=False)
+    responder_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    response_text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+    review = relationship("Review", back_populates="responses")
+    responder = relationship("User")
+
+# ✅ Review Vote Model
 class ReviewVote(Base):
     __tablename__ = "review_votes"
 
     id = Column(Integer, primary_key=True, index=True)
     review_id = Column(Integer, ForeignKey("reviews.id"), nullable=False)
     voter_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    vote_type = Column(Enum(VoteType, name="vote_types"), nullable=False)
+    #vote_type = Column(Enum(VoteType), nullable=False)
+    vote_type = Column(SQLEnum(VoteType), nullable=False)
     created_at = Column(DateTime, default=func.now(), nullable=False)
 
     review = relationship("Review", back_populates="votes")
 
-# ✅ Kullanıcı Şikayet Modeli
+# ✅ Complaint Model
 class Complaint(Base):
     __tablename__ = "complaints"
 
@@ -172,14 +180,15 @@ class Complaint(Base):
     reporter_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     review_id = Column(Integer, ForeignKey("reviews.id"), nullable=True)
     reason = Column(Text, nullable=False)
-    status = Column(Enum("pending", "resolved", "dismissed", name="complaint_statuses"), default="pending", nullable=False)
+    #status = Column(Enum("pending", "resolved", "dismissed", name="complaint_statuses"), default="pending", nullable=False)
+    status = Column(SQLEnum(ComplaintStatus), default=ComplaintStatus.PENDING, nullable=False)  # ✅ HATA DÜZELTİLDİ
     created_at = Column(DateTime, default=func.now(), nullable=False)
 
     reported_user = relationship("User", foreign_keys=[reported_user_id])
     reporter_user = relationship("User", foreign_keys=[reporter_user_id])
     review = relationship("Review", foreign_keys=[review_id])
 
-# ✅ Ödeme Modeli
+# ✅ Payment Model
 class Payment(Base):
     __tablename__ = "payments"
 
@@ -187,7 +196,8 @@ class Payment(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     ride_id = Column(Integer, ForeignKey("rides.id"), nullable=False)
     amount = Column(Float, nullable=False)
-    payment_status = Column(Enum(PaymentStatus, name="payment_statuses"), default=PaymentStatus.PENDING)
+    #payment_status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING)
+    payment_status = Column(SQLEnum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False)  # ✅ HATA DÜZELTİLDİ
     payment_date = Column(DateTime, default=func.now())
 
     user = relationship("User", back_populates="payments")
