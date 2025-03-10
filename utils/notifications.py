@@ -4,7 +4,11 @@ from twilio.rest import Client
 import os
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
-from fastapi import BackgroundTasks
+from fastapi import BackgroundTasks, APIRouter
+
+router = APIRouter()
+from utils.notifications import send_email
+
 
 # ✅ Twilio API Credentials (Çevre değişkenlerinden alınmalı)
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "YOUR_TWILIO_SID")
@@ -63,6 +67,15 @@ def send_email(to_email: str, subject: str, content: str):
     except Exception as e:
         print(f"🚨 Email Sending Failed: {e}")
         return False
+    
+    
+@router.post("/send-email")
+def send_welcome_email():
+    from utils.notifications import send_email  # ✅ Import moved inside function
+    send_email("test@example.com", "Welcome!", "Thank you for signing up!")
+    return {"message": "Email sent"}
+
+
 
 def send_notification(user_id: int, message: str):
     """

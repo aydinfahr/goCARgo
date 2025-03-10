@@ -34,7 +34,6 @@ class ReviewCategory(str, Enum):
     SERVICE = "service"
 
 # ✅ İnceleme Oy Türleri (Like/Dislike)  
-# 🔹 'ReviewVoteType' yerine daha açıklayıcı olması için 'ReviewReviewVoteType' olarak değiştirildi
 class ReviewVoteType(str, Enum):
     LIKE = "like"
     DISLIKE = "dislike"

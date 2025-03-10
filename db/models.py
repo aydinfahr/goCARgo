@@ -238,7 +238,9 @@ class User(Base):
     email = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
     full_name = Column(String, nullable=False)
-    role = Column(SQLEnum(UserRole), nullable=False)  # ✅ Enum artık `db.enums` içinden geliyor
+    role = Column(SQLEnum(UserRole), nullable=False)  # ✅ Enum is fetched from `db.enums`
+    profile_picture = Column(String, nullable=True)
+    verification_code = Column(String, nullable=True)  # ✅ Profile picture support
     is_admin = Column(Boolean, default=False)
     is_banned = Column(Boolean, default=False)
     wallet_balance = Column(Float, default=0.0)
@@ -246,8 +248,13 @@ class User(Base):
     rating_count = Column(Integer, default=0)
     verified_id = Column(Boolean, default=False)
     verified_email = Column(Boolean, default=False)
+    verification_code = Column(String, nullable=True)
     agreed_terms = Column(Boolean, default=False)
     member_since = Column(DateTime, default=func.now())
+
+    def update_is_admin(self):
+        """Ensure that `is_admin` is automatically set based on `role`."""
+        self.is_admin = self.role == UserRole.ADMIN  # ✅ Automatically updates
 
     rides = relationship("Ride", back_populates="driver")
     cars = relationship("Car", back_populates="owner")
@@ -326,6 +333,7 @@ class Payment(Base):
     ride = relationship("Ride", back_populates="payments")
 
 # ✅ Review Model
+## ✅ Review Model (review_category KALDI)
 class Review(Base):
     __tablename__ = "reviews"
 
@@ -333,7 +341,7 @@ class Review(Base):
     ride_id = Column(Integer, ForeignKey("rides.id"), nullable=False)
     reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     reviewee_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    review_category = Column(SQLEnum(ReviewCategory), nullable=False)
+    review_category = Column(SQLEnum(ReviewCategory), nullable=False)  # ✅ Kategori alanı KALDI
     star_rating = Column(Float, nullable=False)
     review_text = Column(Text, nullable=True)
     anonymous_review = Column(Boolean, default=False)
@@ -348,6 +356,8 @@ class Review(Base):
     reviewee = relationship("User", foreign_keys=[reviewee_id], back_populates="reviews_received")
     votes = relationship("ReviewVote", back_populates="review", cascade="all, delete-orphan")
     responses = relationship("ReviewResponse", back_populates="review", cascade="all, delete-orphan")
+
+
 
 # ✅ Review Response Model
 class ReviewResponse(Base):

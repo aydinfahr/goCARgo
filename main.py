@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from routes import notifications
 
 # ✅ Ensure project root is in the Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -75,6 +76,7 @@ app.include_router(ride.router)  # Ride management
 app.include_router(booking.router)  # Booking & payments
 app.include_router(review.router)  # Reviews & ratings
 app.include_router(payment.router)  # Payment processing
+app.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
 
 # ✅ Health Check Endpoint
 @app.get("/health", tags=["System"])
