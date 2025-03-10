@@ -1,0 +1,22 @@
+fastapi
+uvicorn
+sqlalchemy
+passlib
+bcrypt
+pydantic[email]
+alembic
+python-dotenv
+utils
+requests
+python-multipart
+twilio
+sendgrid
+python-jose
+cryptography
+textblob
+stripe
+
+# pip install -r requirements.txt
+# pip uninstall bcrypt passlib
+# pip install bcrypt passlib
+
