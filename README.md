@@ -1,2 +1,0 @@
-# goCARgo
-Car Sharing App
