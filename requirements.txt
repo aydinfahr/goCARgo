@@ -14,5 +14,9 @@ sendgrid
 python-jose
 cryptography
 textblob
+stripe
 
 # pip install -r requirements.txt
+# pip uninstall bcrypt passlib
+# pip install bcrypt passlib
+

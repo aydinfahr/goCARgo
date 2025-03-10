@@ -35,7 +35,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="C:\git-GOCARGO-new\goCARgo\carsharing-venv"
+VIRTUAL_ENV="C:\Projects\goCARgo\carsharing-venv"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

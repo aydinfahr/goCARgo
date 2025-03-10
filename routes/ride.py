@@ -1,34 +1,40 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from db.database import get_db
-from db.models import Ride, User
+from db.models import Ride, User, UserRole  # ✅ ENUM Kullanımı İçin Güncellendi
 from schemas import RideCreate, RideDisplay, RideUpdate
 from datetime import datetime
 from typing import List
+from utils.auth import get_current_user  # ✅ Kullanıcı Doğrulaması İçin Eklendi
 
 router = APIRouter(
     prefix="/rides",
     tags=["Rides"]
 )
 
-# 📌 Yolculuk oluşturma
+# 📌 Yolculuk oluşturma (Sadece DRIVER olan kullanıcılar için)
 @router.post("/", response_model=RideDisplay)
-def create_ride(ride: RideCreate, db: Session = Depends(get_db)):
+def create_ride(
+    ride: RideCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)  # ✅ Şoför kontrolü için eklendi
+):
     """
     Allows drivers to create a new ride.
     """
-    driver = db.query(User).filter(User.id == ride.driver_id, User.role == "driver").first()
-    if not driver:
+    # ✅ ENUM KULLANIMI DÜZELTİLDİ
+    if current_user.role.value != "DRIVER":  
         raise HTTPException(status_code=403, detail="Only drivers can create rides.")
 
     new_ride = Ride(
-        driver_id=ride.driver_id,
+        driver_id=current_user.id,  # ✅ current_user kullanılıyor
         car_id=ride.car_id,
         start_location=ride.start_location,
         end_location=ride.end_location,
         departure_time=ride.departure_time,
         price_per_seat=ride.price_per_seat,
         total_seats=ride.total_seats,
+        available_seats=ride.total_seats,
         status="active"
     )
 
@@ -87,7 +93,12 @@ def get_ride(ride_id: int, db: Session = Depends(get_db)):
 
 # 📌 Ride Güncelleme (Sadece Şoför veya Admin)
 @router.put("/{ride_id}", response_model=RideDisplay)
-def update_ride(ride_id: int, ride_update: RideUpdate, db: Session = Depends(get_db)):
+def update_ride(
+    ride_id: int, 
+    ride_update: RideUpdate, 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)  # ✅ Şoför veya Admin kontrolü için eklendi
+):
     """
     Allows the driver or an admin to update ride details.
     """
@@ -95,6 +106,10 @@ def update_ride(ride_id: int, ride_update: RideUpdate, db: Session = Depends(get
     
     if not ride:
         raise HTTPException(status_code=404, detail="Ride not found.")
+
+    # ✅ Şoför veya admin değilse yetki reddediliyor
+    if current_user.id != ride.driver_id and current_user.role.value != "ADMIN":
+        raise HTTPException(status_code=403, detail="You are not authorized to update this ride.")
 
     # Güncellenmesi istenen alanlar varsa değiştirilir
     ride.start_location = ride_update.start_location or ride.start_location
@@ -111,7 +126,11 @@ def update_ride(ride_id: int, ride_update: RideUpdate, db: Session = Depends(get
 
 # 📌 Ride Silme (Sadece Şoför veya Admin)
 @router.delete("/{ride_id}")
-def delete_ride(ride_id: int, db: Session = Depends(get_db)):
+def delete_ride(
+    ride_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)  # ✅ Yetkilendirme eklendi
+):
     """
     Allows a driver or admin to delete a ride.
     """
@@ -120,6 +139,9 @@ def delete_ride(ride_id: int, db: Session = Depends(get_db)):
     if not ride:
         raise HTTPException(status_code=404, detail="Ride not found.")
 
+    if current_user.id != ride.driver_id and current_user.role.value != "ADMIN":
+        raise HTTPException(status_code=403, detail="You are not authorized to delete this ride.")
+
     db.delete(ride)
     db.commit()
 
@@ -127,9 +149,13 @@ def delete_ride(ride_id: int, db: Session = Depends(get_db)):
 
 # 📌 Admin: Tüm Ride’ları Listeleme
 @router.get("/admin/all")
-def get_all_rides(db: Session = Depends(get_db)):
+def get_all_rides(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Retrieves all rides in the system (Admin only).
     """
+    # ✅ Admin olmayanları engelle
+    if current_user.role.value != "ADMIN":
+        raise HTTPException(status_code=403, detail="Only admins can view all rides.")
+
     rides = db.query(Ride).all()
     return rides
