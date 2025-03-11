@@ -1,11 +1,5 @@
 from enum import Enum
 
-# ✅ Kullanıcı Rolleri (Admin, Driver, Passenger)
-class UserRole(str, Enum):
-    ADMIN = "admin"
-    DRIVER = "driver"
-    PASSENGER = "passenger"
-
 # ✅ Ödeme Durumları
 class PaymentStatus(str, Enum):
     PENDING = "pending"

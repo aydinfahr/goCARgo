@@ -9,7 +9,7 @@ from db.models import User
 from db.database import get_db
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def authenticate_user(db, username: str, password: str):
     """Authenticates a user by verifying the provided password."""
@@ -23,7 +23,7 @@ SECRET_KEY = "your_secret_key_here"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30  # Token süresi 30 dakika
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="users/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="users/token")
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     """Creates a JWT token with expiration time."""
