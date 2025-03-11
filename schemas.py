@@ -283,27 +283,22 @@ class UserDeleteResponse(BaseModel):
     message: str
 
 # ✅ Car Schemas
-class CarBase(BaseModel):
-    brand: str
-    model: str
-    color: str
-    images: Optional[List[str]] = None  # Car images
+class CarBase(BaseModel): 
+    owner_id : int
+    brand : str 
+    model : str
+    color : str
 
-class CarCreate(CarBase):
-    pass  # No additional fields
-
-class CarDisplay(CarBase):
+class CarDisplay(CarBase): 
     id: int
-    owner_id: int
-
     class Config:
         from_attributes = True
 
-class CarUpdate(BaseModel):
-    brand: Optional[str] = None
-    model: Optional[str] = None
-    color: Optional[str] = None
-    images: Optional[List[str]] = None
+# class CarUpdate(BaseModel):
+#     brand: Optional[str] = None
+#     model: Optional[str] = None
+#     color: Optional[str] = None
+#     images: Optional[List[str]] = None
 
 # ✅ Ride Schemas
 class RideBase(BaseModel):
@@ -311,27 +306,41 @@ class RideBase(BaseModel):
     car_id: int
     start_location: str
     end_location: str
+    date: str = Field(..., example=datetime.now().strftime("%d-%m-%Y"))  
+    time: str = Field(..., example=datetime.now().strftime("%H:%M"))   
+    price_per_seat: float = 1.00
+    total_seats: int = 1
+    instant_booking: bool = False
+    
+    class Config:
+        from_attributes = True
+
+    def get_departure_datetime(self) -> datetime:
+        return datetime.strptime(f"{self.date} {self.time}", "%d-%m-%Y %H:%M")
+    
+
+class RideDisplay(BaseModel):
+    id: int
+    driver_id: int
+    car_id: int
+    start_location: str
+    end_location: str
     departure_time: datetime
     price_per_seat: float
     total_seats: int
-    available_seats: int  # ✅ Kullanılabilir koltuk sayısı eklendi
-
-class RideCreate(RideBase):
-    pass  # No additional fields
-
-class RideDisplay(RideBase):
-    id: int
+    available_seats: int
+    instant_booking: bool
 
     class Config:
         from_attributes = True
 
-class RideUpdate(BaseModel):
-    start_location: Optional[str] = None
-    end_location: Optional[str] = None
-    departure_time: Optional[datetime] = None
-    price_per_seat: Optional[float] = None
-    total_seats: Optional[int] = None
-    available_seats: Optional[int] = None  # ✅ Kullanılabilir koltuk güncelleme desteği
+# class RideUpdate(BaseModel):
+#     start_location: Optional[str] = None
+#     end_location: Optional[str] = None
+#     departure_time: Optional[datetime] = None
+#     price_per_seat: Optional[float] = None
+#     total_seats: Optional[int] = None
+#     available_seats: Optional[int] = None  # ✅ Kullanılabilir koltuk güncelleme desteği
 
 # ✅ Booking Schemas
 class BookingBase(BaseModel):
