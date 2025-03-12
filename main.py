@@ -66,9 +66,10 @@ app.add_middleware(
 )
 
 # ✅ Import & Include Routes (Ensure no duplicate imports)
-from routes import user, car, ride, booking, review, payment
+from routes import tokens, user, car, ride, booking, review, payment
 from utils.notifications import send_email, send_system_notifications
 
+app.include_router(tokens.router)  # User management
 app.include_router(user.router)  # User management
 app.include_router(car.router)  # Car management
 app.include_router(ride.router)  # Ride management
