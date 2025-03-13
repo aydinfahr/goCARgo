@@ -1,74 +1,69 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from db.models import Review, ReviewVote, User
-from schemas import ReviewCreate, ReviewUpdate
-from fastapi import HTTPException
+from db.models import Review, ReviewVote, User, Ride, Car
+from schemas import ReviewCreate, ReviewUpdate, RideBase
+from fastapi import HTTPException, status
 from datetime import datetime, timedelta
 try:
     from utils.sentiment_analysis import analyze_sentiment  # ✅ AI Sentiment Analysis for spam detection
 except ImportError:
     raise ImportError("The module 'utils.sentiment_analysis' could not be resolved. Ensure it exists and is in the Python path.")
 
-def create_review(db: Session, review_data: ReviewCreate):
+def create_ride(db: Session, request: RideBase):
     """
-    Creates a new review for a ride, driver, passenger, or service.
-
-    Args:
-        db (Session): The database session.
-        review_data (ReviewCreate): Review creation schema.
-
-    Returns:
-        Review: The created review object.
+    ✅ Handles ride creation with proper validation and datetime handling.
     """
 
-    # Check if the reviewer and reviewee exist
-    reviewer = db.query(User).filter(User.id == review_data.reviewer_id).first()
-    reviewee = db.query(User).filter(User.id == review_data.reviewee_id).first()
+    # ✅ Ensure departure time is a valid datetime object
+    departure_datetime = request.departure_time
 
-    if not reviewer or not reviewee:
-        raise HTTPException(status_code=404, detail="Reviewer or reviewee not found.")
+    # ✅ Check if driver exists
+    driver = db.query(User).filter(User.id == request.driver_id).first()
+    if not driver:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Driver not found.")
 
-    if reviewer.id == reviewee.id:
-        raise HTTPException(status_code=400, detail="You cannot review yourself.")
+    # ✅ Check if car exists
+    car = db.query(Car).filter(Car.id == request.car_id).first()
+    if not car:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Car not found.")
 
-    # ✅ Check if the same review already exists (Prevent duplicate reviews)
-    existing_review = db.query(Review).filter(
-        Review.ride_id == review_data.ride_id,
-        Review.reviewer_id == review_data.reviewer_id,
-        Review.reviewee_id == review_data.reviewee_id
+    # ✅ Ensure the car belongs to the driver
+    if car.owner_id != request.driver_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This car does not belong to the driver.")
+
+    # ✅ Prevent duplicate rides with the same departure time
+    existing_ride = db.query(Ride).filter(
+        Ride.driver_id == request.driver_id,
+        Ride.departure_time == departure_datetime
     ).first()
+    if existing_ride:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A ride with the same details already exists.")
 
-    if existing_review:
-        raise HTTPException(status_code=400, detail="You have already reviewed this ride/user.")
+    # ✅ Prevent setting a past departure time
+    if departure_datetime < datetime.now():
+        raise HTTPException(status_code=400, detail="Departure time cannot be in the past.")
 
-    # ✅ AI Sentiment Analysis Check (Blocks Fake or Abusive Reviews)
-    if analyze_sentiment(review_data.review_text):
-        raise HTTPException(status_code=400, detail="Review contains abusive or spam content.")
+    # ✅ Validate price per seat
+    if request.price_per_seat <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Price per seat must be greater than zero.")
 
-    new_review = Review(
-        ride_id=review_data.ride_id,
-        reviewer_id=review_data.reviewer_id,
-        reviewee_id=review_data.reviewee_id,
-        review_category=review_data.review_category,
-        star_rating=review_data.star_rating,
-        review_text=review_data.review_text,
-        anonymous_review=review_data.anonymous_review,
-        created_at=datetime.utcnow()
-    )
+    # ✅ Validate seat count
+    if request.total_seats < 1 or request.total_seats > 4:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Total seats must be between 1 and 4.")
 
-    db.add(new_review)
+    # ✅ Validate instant booking flag
+    if not isinstance(request.instant_booking, bool):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid value for instant_booking.")
 
-    try:
-        db.commit()
-        db.refresh(new_review)
-        
-        # ✅ Update Reviewee's Average Rating
-        update_user_rating(db, review_data.reviewee_id)
-        
-        return new_review
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Review could not be created due to integrity constraints.")
+    # ✅ Create ride instance
+    ride_data = request.model_dump()  # Convert the Pydantic model to a dictionary
+    new_ride = Ride(**ride_data, available_seats=request.total_seats)
+
+    db.add(new_ride)
+    db.commit()
+    db.refresh(new_ride)
+
+    return new_ride
 
 def get_review_by_id(db: Session, review_id: int):
     """

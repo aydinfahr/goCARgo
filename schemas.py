@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
 from db.enums import (
     ReviewCategory,
@@ -10,16 +10,19 @@ from db.enums import (
     ComplaintStatus
 )
 
-
-
 # ✅ User Schemas
 class UserBase(BaseModel):
     username: str
     email: EmailStr
     password: str
     full_name: str
-    agreed_terms: bool
+    agreed_terms: bool = Field(..., description="User must accept terms and conditions")
 
+    @classmethod
+    def validate_agreed_terms(cls, v):
+        if v is False:
+            raise ValueError("❌ You must accept the terms and conditions to register.")
+        return v
 
 class UserDisplay(BaseModel):
     id: int
@@ -32,42 +35,43 @@ class UserDisplay(BaseModel):
     rating_count: int
     verified_id: bool
     verified_email: bool
+    agreed_terms: bool
     member_since: datetime
-    profile_picture: Optional[str] = None  # Profile Image URL
 
     class Config:
-        from_attributes = True  # Enables ORM mode for SQLAlchemy
+        from_attributes = True  # ✅ Enable ORM mode for SQLAlchemy
 
-class UserToken(BaseModel):
-    email: EmailStr
-    password: str
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
     email: Optional[EmailStr] = None
+    password: str
     full_name: Optional[str] = None
-    profile_picture: Optional[str] = None
+    # profile_picture: Optional[str] = None
 
 class UserDeleteResponse(BaseModel):
     message: str
 
+class UserPasswordUpdate(BaseModel):
+    old_password: str
+    new_password: str
+
 # ✅ Car Schemas
 class CarBase(BaseModel): 
-    owner_id : int
-    brand : str 
-    model : str
-    color : str
+    owner_id: int
+    brand: str 
+    model: str
+    color: str
 
 class CarDisplay(CarBase): 
     id: int
+
     class Config:
         from_attributes = True
 
-# class CarUpdate(BaseModel):
-#     brand: Optional[str] = None
-#     model: Optional[str] = None
-#     color: Optional[str] = None
-#     images: Optional[List[str]] = None
+# ✅ Ride Schemas
+from pydantic import BaseModel, Field
+from datetime import datetime
 
 # ✅ Ride Schemas
 class RideBase(BaseModel):
@@ -75,41 +79,22 @@ class RideBase(BaseModel):
     car_id: int
     start_location: str
     end_location: str
-    date: str = Field(..., example=datetime.now().strftime("%d-%m-%Y"))  
-    time: str = Field(..., example=datetime.now().strftime("%H:%M"))   
-    price_per_seat: float = 1.00
-    total_seats: int = 1
-    instant_booking: bool = False
-    
+    departure_time: datetime  # ✅ datetime type used instead of date+time
+    price_per_seat: float = Field(..., gt=0, description="Price per seat must be greater than zero.")
+    total_seats: int = Field(..., ge=1, le=4, description="Total seats must be between 1 and 4.")
+    instant_booking: bool = False  # ✅ Ensuring it's a valid boolean
+
     class Config:
         from_attributes = True
 
-    def get_departure_datetime(self) -> datetime:
-        return datetime.strptime(f"{self.date} {self.time}", "%d-%m-%Y %H:%M")
-    
-
-class RideDisplay(BaseModel):
+# ✅ Display Ride Data
+class RideDisplay(RideBase):
     id: int
-    driver_id: int
-    car_id: int
-    start_location: str
-    end_location: str
-    departure_time: datetime
-    price_per_seat: float
-    total_seats: int
     available_seats: int
-    instant_booking: bool
 
     class Config:
         from_attributes = True
 
-# class RideUpdate(BaseModel):
-#     start_location: Optional[str] = None
-#     end_location: Optional[str] = None
-#     departure_time: Optional[datetime] = None
-#     price_per_seat: Optional[float] = None
-#     total_seats: Optional[int] = None
-#     available_seats: Optional[int] = None  # ✅ Kullanılabilir koltuk güncelleme desteği
 
 # ✅ Booking Schemas
 class BookingBase(BaseModel):
@@ -141,23 +126,24 @@ class BookingCancel(BaseModel):
 # ✅ Review Schemas
 class ReviewBase(BaseModel):
     ride_id: int
-    author_id: int  # User who wrote the review
-    target_id: int  # User being reviewed
+    reviewer_id: int  # User who wrote the review
+    reviewee_id: int  # User being reviewed
     review_category: ReviewCategory  # Enum for review type
     star_rating: float = Field(..., ge=1.0, le=5.0, description="Rating must be between 1 and 5")
     review_text: Optional[str] = None
     anonymous_review: bool = False
     media_url: Optional[str] = None  # Image/Video URL
+    created_at: Optional[datetime] = None
 
 class ReviewCreate(ReviewBase):
-    pass  # No additional fields
+    created_at: datetime = Field(default_factory=datetime.utcnow) 
 
 class ReviewDisplay(ReviewBase):
     id: int
     created_at: datetime
-    likes: int
-    dislikes: int
-    average_rating: float  # Dynamically updated average rating
+    likes: Optional[int] = 0 
+    dislikes: Optional[int] = 0
+    average_rating: Optional[float] = 0.0  # Dynamically updated average rating
 
     class Config:
         from_attributes = True
@@ -165,8 +151,7 @@ class ReviewDisplay(ReviewBase):
 class ReviewVoteCreate(BaseModel):
     review_id: int
     voter_id: int
-    vote_type: ReviewVoteType
-  # Enum: Like or Dislike
+    vote_type: ReviewVoteType  # Enum: Like or Dislike
 
 class ReviewResponseCreate(BaseModel):
     review_id: int
@@ -177,13 +162,11 @@ class ReviewResponseCreate(BaseModel):
 class ReviewVoteBase(BaseModel):
     review_id: int
     voter_id: int
-    vote_type: ReviewVoteType
-  # Enum: Like or Dislike
+    vote_type: ReviewVoteType  # Enum: Like or Dislike
 
 class ReviewVoteDisplay(BaseModel):
     id: int
     vote_type: ReviewVoteType
-
     created_at: datetime
 
     class Config:
@@ -195,7 +178,7 @@ class PaymentBase(BaseModel):
     ride_id: int
     amount: float
     payment_status: PaymentStatus
-    payment_method: PaymentMethod  # ✅ Ödeme yöntemi seçimi için dropdown desteği
+    payment_method: PaymentMethod  
 
 class PaymentCreate(PaymentBase):
     pass  # No additional fields

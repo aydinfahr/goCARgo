@@ -2,11 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, status, Form, UploadFile,
 from sqlalchemy.orm import Session
 from db.database import get_db
 from db.models import User
-from schemas import UserDisplay, UserUpdate, UserDeleteResponse, UserBase
+from schemas import UserDisplay, UserUpdate, UserDeleteResponse, UserBase, UserPasswordUpdate
 from utils.auth import hash_password, verify_password, create_access_token, get_current_user
 from utils.notifications import send_email
 import shutil
 import os
+from datetime import datetime
+from utils.dependencies import get_current_user
+
+
 
 router = APIRouter(
     prefix="/users",
@@ -18,11 +22,16 @@ router = APIRouter(
 def register_user(
     request: UserBase,
     db: Session = Depends(get_db)
-    ):
+):
     """
-    **Creates a new user registration and returns a JWT access token.**
+    ✅ Creates a new user registration and returns user data.
     - Password is hashed using bcrypt.
+    - Ensures the user has accepted terms & conditions before registering.
     """
+
+    # ✅ Ensure user has accepted the terms
+    if not request.agreed_terms:
+        raise HTTPException(status_code=400, detail="❌ You must accept the terms and conditions to register.")
 
     # ✅ Check if username or email is already registered
     existing_user = db.query(User).filter(
@@ -30,31 +39,34 @@ def register_user(
     ).first()
 
     if existing_user:
-        raise HTTPException(status_code=400, detail="Username or Email already registered")
+        raise HTTPException(status_code=400, detail="❌ Username or Email already registered.")
 
-    # ✅ Hash the password
+    # ✅ Hash the password before storing
     hashed_pw = hash_password(request.password)
 
+    # ✅ Create a new user
     new_user = User(
         username=request.username,
         email=request.email,
         password=hashed_pw,
         full_name=request.full_name,
-        agreed_terms=request.agreed_terms
+        agreed_terms=request.agreed_terms,
+        is_admin=False,  # Default user role
+        is_banned=False,  # Default: Not banned
+        rating=0.0,  # Default rating
+        rating_count=0,  # Default rating count
+        verified_id=False,  # Default: ID not verified
+        verified_email=False,  # Default: Email not verified
+        member_since=datetime.utcnow()  # Set registration date
     )
 
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    # ✅ Generate JWT Token
-    access_token = create_access_token(new_user.id)
-
-    # # 📩 Send welcome email
-    # send_email(request.email, "Welcome to goCARgo!", "Thanks for signing up!")
-
-    # return {"user": new_user, "access_token": access_token}
+    # ✅ Return the newly created user
     return new_user
+
 
 # ----------------------- 📌 Retrieve User Profile ----------------------- #
 @router.get("/{user_id}", response_model=UserDisplay)
@@ -69,22 +81,51 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
     return user
 
 # ----------------------- 📌 Update User Profile ----------------------- #
-@router.put("/{user_id}/update", response_model=UserDisplay)
-def update_user(user_id: int, user_update: UserUpdate, db: Session = Depends(get_db)):
-    """
-    **Update user profile.**
-    """
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+@router.put("/{user_id}", response_model=UserDisplay)
+def update_user(
+    user_id: int,
+    request: UserUpdate,
+    db: Session = Depends(get_db)
+):
 
-    update_data = user_update.dict(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(user, key, value)
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="❌ User not found.")
+
+    if request.username:
+        user.username = request.username
+    if request.email:
+        user.email = request.email
+    if request.full_name:
+        user.full_name = request.full_name
 
     db.commit()
     db.refresh(user)
+
     return user
+
+@router.put("/{user_id}/change-password")
+def change_password(
+    user_id: int,
+    request: UserPasswordUpdate,
+    db: Session = Depends(get_db)
+):
+   
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="❌ User not found.")
+
+    # ✅ Verify old password before allowing the change
+    if not verify_password(request.old_password, user.password):
+        raise HTTPException(status_code=400, detail="❌ Incorrect same with old password.")
+
+    # ✅ Hash new password before saving
+    user.password = hash_password(request.new_password)
+    db.commit()
+
+    return {"message": "✅ Password updated successfully."}
 
 # ----------------------- 📌 Delete User ----------------------- #
 @router.delete("/{user_id}", response_model=UserDeleteResponse)

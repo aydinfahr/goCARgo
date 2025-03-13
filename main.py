@@ -14,13 +14,12 @@
 
 import sys
 import os
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-
-# ✅ Ensure project root is in the Python path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # ✅ Load environment variables (.env)
 load_dotenv()
@@ -66,7 +65,7 @@ app.add_middleware(
 )
 
 # ✅ Import & Include Routes (Ensure no duplicate imports)
-from routes import tokens, user, car, ride, booking, review, payment
+from routes import tokens, user, car, ride, booking, review, payment, admin
 from utils.notifications import send_email, send_system_notifications
 
 app.include_router(tokens.router)  # User management
@@ -76,6 +75,7 @@ app.include_router(ride.router)  # Ride management
 app.include_router(booking.router)  # Booking & payments
 app.include_router(review.router)  # Reviews & ratings
 app.include_router(payment.router)  # Payment processing
+#app.include_router(admin.router)
 
 # ✅ Health Check Endpoint
 @app.get("/health", tags=["System"])
