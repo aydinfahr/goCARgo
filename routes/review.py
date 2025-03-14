@@ -137,7 +137,7 @@ def delete_review(review_id: int, user_id: int, db: Session = Depends(get_db)):
     # ✅ Yalnızca yorumu yazan kişi veya admin silebilir
     user = db.query(User).filter(User.id == user_id).first()
 
-    if not user or (user.id != review.reviewer_id and user.role != "admin"):
+    if not user or (user.id != review.reviewer_id and not user.is_admin):
         raise HTTPException(status_code=403, detail="You don't have permission to delete this review.")
 
     db.delete(review)

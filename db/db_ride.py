@@ -2,6 +2,7 @@
 from fastapi import HTTPException, Response, status
 from sqlalchemy.orm.session import Session
 from sqlalchemy.sql.expression import collate
+from routes import ride
 from schemas import RideBase
 from db.models import Ride, User, Car
 from datetime import date, datetime
@@ -64,44 +65,54 @@ def create_ride(db: Session, request: RideBase):
     return new_ride
 
 
-def get_all_rides(db: Session, driver_id, ride_status):
-    current_time = datetime.now()
-    ride_query = db.query(Ride)
+# def get_all_rides(db: Session, driver_id, ride_status):
+#     current_time = datetime.now()
+#     ride_query = db.query(Ride)
     
-    if driver_id:
-        driver = db.query(User).filter(User.id == driver_id).first()
-        if not driver:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Driver not found")
-        ride_query = ride_query.filter(Ride.driver_id == driver_id)
+#     if driver_id:
+#         driver = db.query(User).filter(User.id == driver_id).first()
+#         if not driver:
+#             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Driver not found")
+#         ride_query = ride_query.filter(Ride.driver_id == driver_id)
 
-    if ride_status == RideStatus.past:
-        ride_query = ride_query.filter(Ride.departure_time < current_time)
-    elif ride_status == RideStatus.upcoming:
-        ride_query = ride_query.filter(Ride.departure_time >= current_time)
+#     if ride_status == RideStatus.past:
+#         ride_query = ride_query.filter(Ride.departure_time < current_time)
+#     elif ride_status == RideStatus.upcoming:
+#         ride_query = ride_query.filter(Ride.departure_time >= current_time)
     
-    rides = ride_query.all()
+#     rides = ride_query.all()
 
-    return rides  # Return all rides if no status is provided
+#     return rides  # Return all rides if no status is provided
 
 def search_rides(
         db: Session, 
+        driver_id : int,
+        ride_status : RideStatus,
         start_location : str,
         end_location : str,       #? Buralarda Optional[str] = None gerekli mi
         departure_date : date, 
         number_of_seats : int, 
         ):
-        #handle any exception
-    ridesQuery = db.query(Ride)
+    
+    current_time = datetime.now()
+    rides_query = db.query(Ride)
+
+    if driver_id:
+        rides_query = rides_query.filter(Ride.driver_id == driver_id)
+    if ride_status == RideStatus.past:
+        rides_query = rides_query.filter(Ride.departure_time < current_time)
+    elif ride_status == RideStatus.upcoming:
+        rides_query = rides_query.filter(Ride.departure_time >= current_time)
     if start_location:
-        ridesQuery = ridesQuery.filter(collate(Ride.start_location, "NOCASE") == start_location)
+        rides_query = rides_query.filter(collate(Ride.start_location, "NOCASE") == start_location)
     if end_location:
-        ridesQuery = ridesQuery.filter(collate(Ride.end_location, "NOCASE") == end_location)
+        rides_query = rides_query.filter(collate(Ride.end_location, "NOCASE") == end_location)
     if departure_date:
-        ridesQuery = ridesQuery.filter(func.date(Ride.departure_time) == departure_date)
+        rides_query = rides_query.filter(func.date(Ride.departure_time) == departure_date)
     if number_of_seats:
-        ridesQuery = ridesQuery.filter(Ride.available_seats >= number_of_seats)
+        rides_query = rides_query.filter(Ride.available_seats >= number_of_seats)
        
-    rides = ridesQuery.all()
+    rides = rides_query.all()
     return rides
 
 

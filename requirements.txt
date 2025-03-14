@@ -15,6 +15,9 @@ python-jose
 cryptography
 textblob
 stripe
+transformers 
+# torch 
+#langdetect
 
 # pip install -r requirements.txt
 # pip uninstall bcrypt passlib

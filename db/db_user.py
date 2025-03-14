@@ -1,54 +1,58 @@
 from sqlalchemy.orm import Session
 from db.models import User
-from schemas import UserCreate, UserUpdate
+from schemas import AdminAssign, UserBase, UserUpdate
 from utils.hashing import hash_password  # ✅ Secure password hashing
 from fastapi import HTTPException, Depends
 from utils.auth import get_current_user  # ✅ Authorization for user actions
 
-def create_user(db: Session, user_data: UserCreate):
-    """
-    Creates a new user with a hashed password.
-    """
-    existing_user = db.query(User).filter(
-        (User.email == user_data.email) | (User.username == user_data.username)
-    ).first()
+# def create_user(db: Session, user_data: UserCreate):
+#     """
+#     Creates a new user with a hashed password.
+#     """
+#     existing_user = db.query(User).filter(
+#         (User.email == user_data.email) | (User.username == user_data.username)
+#     ).first()
 
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Email or username is already registered.")
+#     if existing_user:
+#         raise HTTPException(status_code=400, detail="Email or username is already registered.")
 
-    hashed_password = hash_password(user_data.password)
+#     hashed_password = hash_password(user_data.password)
 
-    new_user = User(
-        username=user_data.username,
-        email=user_data.email,
-        password=hashed_password,
-        full_name=user_data.full_name,
-        role=user_data.role.value,  # ✅ Enum string olarak kaydedildi
-        verified_email=False,
-        verified_id=False,
-        profile_picture=user_data.profile_picture
-    )
+#     new_user = User(
+#         username=user_data.username,
+#         email=user_data.email,
+#         password=hashed_password,
+#         full_name=user_data.full_name,
+#         role=user_data.role.value,  # ✅ Enum string olarak kaydedildi
+#         verified_email=False,
+#         verified_id=False,
+#         profile_picture=user_data.profile_picture
+#     )
 
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+#     db.add(new_user)
+#     db.commit()
+#     db.refresh(new_user)
 
-    return new_user
+#     return new_user
 
 
-def get_user_by_id(db: Session, user_id: int, current_user: User = Depends(get_current_user)):
-    """
-    Fetches a user by their unique ID (only the user themselves or an admin can access).
-    """
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+# def get_user_by_id(db: Session, user_id: int, current_user: User = Depends(get_current_user)):
+#     """
+#     Fetches a user by their unique ID (only the user themselves or an admin can access).
+#     """
+#     user = db.query(User).filter(User.id == user_id).first()
+#     if not user:
+#         raise HTTPException(status_code=404, detail="User not found")
 
-    if current_user.id != user_id and current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Not authorized to view this user")
+#     if current_user.id != user_id and not current_user.is_admin:
+#         raise HTTPException(status_code=403, detail="Not authorized to view this user")
 
-    return user
+#     return user
 
+
+def get_users(db:Session):
+    users = db.query(User).all()
+    return users
 
 def get_user_by_email(db: Session, email: str, current_user: User = Depends(get_current_user)):
     """
@@ -58,7 +62,7 @@ def get_user_by_email(db: Session, email: str, current_user: User = Depends(get_
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if current_user.email != email and current_user.role != "admin":
+    if current_user.email != email and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized to access this user")
 
     return user
@@ -72,7 +76,7 @@ def update_user(db: Session, user_id: int, user_update_data: UserUpdate, current
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if current_user.id != user_id and current_user.role != "admin":
+    if current_user.id != user_id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized to update this user")
 
     if user_update_data.email and user_update_data.email != user.email:
@@ -92,6 +96,18 @@ def update_user(db: Session, user_id: int, user_update_data: UserUpdate, current
     db.refresh(user)
     return user
 
+def assign_admin(id:int, request: AdminAssign, db: Session):
+    user = db.query(User).filter(User.id == id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.is_admin = request.is_admin
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+
 
 def delete_user(db: Session, user_id: int, current_user: User = Depends(get_current_user)):
     """
@@ -101,7 +117,7 @@ def delete_user(db: Session, user_id: int, current_user: User = Depends(get_curr
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if current_user.id != user_id and current_user.role != "admin":
+    if current_user.id != user_id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized to delete this user")
 
     db.delete(user)
@@ -117,7 +133,7 @@ def verify_user_email(db: Session, user_id: int, current_user: User = Depends(ge
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if current_user.id != user_id and current_user.role != "admin":
+    if current_user.id != user_id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized to verify this user's email")
 
     user.verified_email = True
@@ -134,7 +150,7 @@ def verify_user_id(db: Session, user_id: int, current_user: User = Depends(get_c
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if current_user.id != user_id and current_user.role != "admin":
+    if current_user.id != user_id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized to verify this user's ID")
 
     user.verified_id = True

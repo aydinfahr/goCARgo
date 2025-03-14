@@ -24,14 +24,9 @@ def get_all_cars(db: Session, owner_id: int):
     car_query = db.query(Car)
 
     if owner_id:
-        owner = db.query(User).filter(User.id == owner_id).first()
-        if not owner:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-        car_query = car_query.filter(Car.owner_id == owner_id).all()
-    else:
-        car_query =  car_query.all() #Sadece admin bunu yapabilmeli
-        
-    return car_query
+        car_query = car_query.filter(Car.owner_id == owner_id)
+    
+    return car_query.all() 
       
 
 def get_car_by_id(db: Session, car_id: int):

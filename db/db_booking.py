@@ -1,186 +1,135 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from db.models import Booking, Ride, User, Payment
-from schemas import BookingCreate, BookingCancel
+from schemas import BookingBase
 from datetime import datetime, timedelta
 from fastapi import HTTPException
 
-def create_booking(db: Session, booking_data: BookingCreate):
-    """
-    Creates a new booking for a ride.
+def create_booking(db: Session, request: BookingBase):
+    user = db.query(User).filter(User.id == request.passenger_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    #  if not user.verified_email:
+    #     raise HTTPException(status_code=400, detail="You must verify your email before booking.")
 
-    Args:
-        db (Session): The database session.
-        booking_data (BookingCreate): Booking creation schema.
+    ride = db.query(Ride).filter(Ride.id == request.ride_id).first()
+    if not ride:
+        raise HTTPException(status_code=404, detail="Ride not found")
+    if request.passenger_id == ride.driver_id:
+        raise HTTPException(status_code=400, detail="You cannot book your own ride.")
 
-    Returns:
-        Booking: The created booking object.
-    """
-    ride = db.query(Ride).filter(Ride.id == booking_data.ride_id).first()
-    passenger = db.query(User).filter(User.id == booking_data.passenger_id).first()
+    existing_booking = db.query(Booking).filter(
+        Booking.ride_id == request.ride_id,
+        Booking.passenger_id == request.passenger_id
+    ).first()
+    if existing_booking:
+        raise HTTPException(status_code=400, detail="You have already booked this ride.")
+
+    if request.seats_booked <= 0:
+        raise HTTPException(status_code=400, detail="Invalid seat count. Must be at least 1.")
+
+    if ride.available_seats < request.seats_booked:
+        raise HTTPException(status_code=400, detail="Not enough available seats.")
+    
+    new_booking = Booking(
+        ride_id=request.ride_id,
+        passenger_id=request.passenger_id,
+        seats_booked=request.seats_booked,
+
+        status="confirmed" if ride.instant_booking else "pending"
+    )
+    try:
+        db.add(new_booking)
+        ride.available_seats -= request.seats_booked
+        db.commit()
+        db.refresh(new_booking)
+
+        # 🚀 Eğer Instant Booking açıksa kullanıcıya onay e-postası gönder
+        # if ride.instant_booking:
+        #     send_email(user.email, "Your booking is confirmed!", f"Your booking for ride {ride.id} has been confirmed.")
+        # else:
+        #     # 🚀 Eğer Instant Booking kapalıysa, sürücüye onay e-postası gönder
+        #     driver = db.query(DbUser).filter(DbUser.id == ride.driver_id).first()
+        #     send_email(driver.email, "New Booking Request", f"You have a new booking request for ride {ride.id}. Please confirm or reject it.")
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Database error: Possible duplicate booking.")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+    return new_booking
+
+
+# def get_all_bookings(db: Session, passenger_id: int, ride_id: int):
+#     booking_query =  db.query(Booking)
+
+#     if passenger_id:
+#         booking_query = booking_query.filter(Booking.passenger_id == passenger_id)
+
+#     if ride_id:
+#         booking_query = booking_query.filter(Booking.ride_id == ride_id)
+#     bookings = booking_query.all()
+
+#     return bookings
+
+
+def update_booking(db: Session, booking_id: int, request: BookingBase) -> Booking:
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+
+    ride = db.query(Ride).filter(Ride.id == booking.ride_id).first()
 
     if not ride:
         raise HTTPException(status_code=404, detail="Ride not found")
 
-    if not passenger:
-        raise HTTPException(status_code=404, detail="Passenger not found")
+    if booking.status != "pending":
+        raise HTTPException(status_code=400, detail="Booking is not in a pending state.")
 
-    if booking_data.seats_booked > ride.total_seats:
-        raise HTTPException(status_code=400, detail="Not enough seats available")
+    if request.seats_booked <= 0:
+        raise HTTPException(status_code=400, detail="Invalid seat count. Must be at least 1.")
 
-    total_price = ride.price_per_seat * booking_data.seats_booked
+    if ride.available_seats + booking.seats_booked < request.seats_booked:
+        raise HTTPException(status_code=400, detail="Not enough available seats.")
 
-    if passenger.wallet_balance < total_price:
-        raise HTTPException(status_code=400, detail="Insufficient balance")
+    ride.available_seats += booking.seats_booked
+    booking.seats_booked = request.seats_booked
+    ride.available_seats -= request.seats_booked
 
-    # Deduct payment from user's wallet
-    passenger.wallet_balance -= total_price
-    ride.total_seats -= booking_data.seats_booked
-
-    # Create booking entry
-    new_booking = Booking(
-        ride_id=booking_data.ride_id,
-        passenger_id=booking_data.passenger_id,
-        seats_booked=booking_data.seats_booked,
-        booking_source="online",
-        status="confirmed"
-    )
-
-    # Create payment entry
-    new_payment = Payment(
-        user_id=booking_data.passenger_id,
-        ride_id=booking_data.ride_id,
-        amount=total_price,
-        payment_status="completed"
-    )
-
-    db.add(new_booking)
-    db.add(new_payment)
-
-    try:
-        db.commit()
-        db.refresh(new_booking)
-        return new_booking
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Booking could not be created due to database constraints.")
-
-def get_booking_by_id(db: Session, booking_id: int):
-    """
-    Fetches a booking by its ID.
-
-    Args:
-        db (Session): The database session.
-        booking_id (int): The ID of the booking.
-
-    Returns:
-        Booking: The retrieved booking object.
-    """
-    booking = db.query(Booking).filter(Booking.id == booking_id).first()
-
-    if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found")
+    db.commit()
+    db.refresh(booking)
 
     return booking
 
-def get_bookings_for_user(db: Session, user_id: int):
-    """
-    Retrieves all bookings made by a specific user.
 
-    Args:
-        db (Session): The database session.
-        user_id (int): The ID of the user.
 
-    Returns:
-        List[Booking]: List of bookings for the user.
-    """
-    bookings = db.query(Booking).filter(Booking.passenger_id == user_id).all()
-
-    if not bookings:
-        raise HTTPException(status_code=404, detail="No bookings found for this user.")
-
-    return bookings
-
-def cancel_booking(db: Session, booking_id: int):
-    """
-    Cancels a booking and processes a refund.
-
-    Args:
-        db (Session): The database session.
-        booking_id (int): The ID of the booking.
-
-    Returns:
-        dict: Confirmation message and refund details.
-    """
+def update_booking_status(db: Session, booking_id: int, status: str) -> Booking:
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
 
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
-
-    if booking.status == "cancelled":
-        raise HTTPException(status_code=400, detail="Booking is already cancelled")
 
     ride = db.query(Ride).filter(Ride.id == booking.ride_id).first()
-    passenger = db.query(User).filter(User.id == booking.passenger_id).first()
 
-    if not ride or not passenger:
-        raise HTTPException(status_code=404, detail="Ride or passenger not found")
+    if not ride:
+        raise HTTPException(status_code=404, detail="Ride not found")
+ 
+    if booking.status != "pending":
+        raise HTTPException(status_code=400, detail="Booking is not in a pending state.")
 
-    # Refund calculation
-    time_left = ride.departure_time - datetime.utcnow()
-    refund_percentage = 0.0
+    booking.status = status
 
-    if time_left >= timedelta(hours=24):
-        refund_percentage = 1.0  # 100% refund
-    elif time_left >= timedelta(hours=12):
-        refund_percentage = 0.5  # 50% refund
-
-    refund_amount = ride.price_per_seat * booking.seats_booked * refund_percentage
-
-    # Process refund
-    passenger.wallet_balance += refund_amount
-    booking.status = "cancelled"
-    booking.refund_amount = refund_amount
+    if status == "rejected":
+        ride.available_seats += booking.seats_booked
 
     db.commit()
+    db.refresh(booking)
 
-    return {"message": "Booking cancelled", "refund": refund_amount}
+    return booking  
 
-def get_bookings_for_ride(db: Session, ride_id: int):
-    """
-    Retrieves all bookings for a specific ride.
 
-    Args:
-        db (Session): The database session.
-        ride_id (int): The ID of the ride.
 
-    Returns:
-        List[Booking]: List of bookings for the ride.
-    """
-    bookings = db.query(Booking).filter(Booking.ride_id == ride_id).all()
 
-    if not bookings:
-        raise HTTPException(status_code=404, detail="No bookings found for this ride")
-
-    return bookings
-
-def delete_booking(db: Session, booking_id: int):
-    """
-    Deletes a booking from the database.
-
-    Args:
-        db (Session): The database session.
-        booking_id (int): The ID of the booking to be deleted.
-
-    Returns:
-        dict: Confirmation message.
-    """
-    booking = db.query(Booking).filter(Booking.id == booking_id).first()
-
-    if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found")
-
-    db.delete(booking)
-    db.commit()
-
-    return {"message": "Booking deleted successfully"}

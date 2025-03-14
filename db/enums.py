@@ -1,10 +1,5 @@
 from enum import Enum
 
-# ✅ Kullanıcı Rolleri (Admin, Driver, Passenger)
-class UserRole(str, Enum):
-    ADMIN = "admin"
-    DRIVER = "driver"
-    PASSENGER = "passenger"
 
 # ✅ Ödeme Durumları
 class PaymentStatus(str, Enum):
@@ -20,11 +15,12 @@ class PaymentMethod(str, Enum):
     IDEAL = "ideal"
     PAYPAL = "paypal"
 
-# ✅ Rezervasyon Durumları
-class BookingStatus(str, Enum):
-    PENDING = "pending"
-    CONFIRMED = "confirmed"
-    CANCELLED = "cancelled"
+# # ✅ Rezervasyon Durumları
+# class BookingStatus(str, Enum):
+#     PENDING = "pending"
+#     CONFIRMED = "confirmed"
+#     REJECTED = "rejected"
+#     CANCELLED = "cancelled"
 
 # ✅ İnceleme (Review) Kategorileri
 class ReviewCategory(str, Enum):
@@ -63,3 +59,7 @@ class NumberOfSeats(int, Enum):
 class RideStatus(str, Enum):
     past = "past"  
     upcoming = "upcoming"
+
+class SearchType(str, Enum):
+    passanger_id = "passanger_id"
+    ride_id = "ride_id"
